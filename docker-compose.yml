@@ -1,0 +1,88 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "YourStrong@Passw0rd"
+    ports:
+      - "1433:1433"
+
+  mongodb:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+
+  identity.api:
+    build:
+      context: .
+      dockerfile: Identity.API/Dockerfile
+    ports:
+      - "5000:8080"
+    environment:
+      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=IdentityDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=False;"
+    depends_on:
+      - sqlserver
+
+  catalog.api:
+    build:
+      context: .
+      dockerfile: Catalog.API/Dockerfile
+    ports:
+      - "5001:8080"
+    environment:
+      ConnectionStrings__MongoConnection: "mongodb://mongodb:27017"
+    depends_on:
+      - mongodb
+
+  booking.api:
+    build:
+      context: .
+      dockerfile: Booking.API/Dockerfile
+    ports:
+      - "5002:8080"
+    environment:
+      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=BookingDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=False;"
+      RabbitMQHost: rabbitmq
+    depends_on:
+      - sqlserver
+      - rabbitmq
+
+  payment.api:
+    build:
+      context: .
+      dockerfile: Payment.API/Dockerfile
+    ports:
+      - "5003:8080"
+    environment:
+      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=PaymentDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=False;"
+      RabbitMQHost: rabbitmq
+    depends_on:
+      - rabbitmq
+
+  notification.api:
+    build:
+      context: .
+      dockerfile: Notification.API/Dockerfile
+    ports:
+      - "5004:8080"
+    environment:
+      RabbitMQHost: rabbitmq
+    depends_on:
+      - rabbitmq
+
+  frontend:
+    build:
+      context: ./ticketbooking-ui
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - identity.api
+      - catalog.api
+      - booking.api

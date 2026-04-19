@@ -1,0 +1,78 @@
+/* Custom styles for Ticket Booking */
+:root {
+  --bs-body-bg: #0f172a;
+  --bs-body-color: #f8fafc;
+  --primary-gradient: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+}
+
+body {
+  background-color: var(--bs-body-bg);
+  color: var(--bs-body-color);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+.navbar {
+  background-color: #1e293b !important;
+  border-bottom: 1px solid #334155;
+}
+
+.card {
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+}
+
+.btn-primary {
+  background: var(--primary-gradient);
+  border: none;
+  font-weight: 600;
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+  background: var(--primary-gradient);
+}
+
+.seat {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background-color: #334155;
+  color: #94a3b8;
+  border: none;
+}
+
+.seat.selected {
+  background-color: #3b82f6;
+  color: white;
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+}
+
+.seat.occupied {
+  background-color: #ef4444; /* red-500 */
+  color: #fee2e2;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.seat:hover:not(:disabled):not(.occupied) {
+  background-color: #475569;
+}
+
+.screen-divider {
+  height: 4px;
+  background: var(--primary-gradient);
+  border-radius: 10px;
+  margin-bottom: 2rem;
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+}
