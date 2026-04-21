@@ -1,7 +1,7 @@
 const API_URL = 'http://localhost:5002/api/bookings';
-const SHOW_ID = 'a389231c-76b6-4e67-93ae-56255cfde6c8'; // Replace with a real Show ID from your DB
-const CONCURRENT_USERS = 50;
-const SEATS = ['B1', 'B2'];
+const SHOW_ID = 'd9269882-02a4-44e9-b870-858a56b7b1a6'; // Replace with a real Show ID from your DB
+const CONCURRENT_USERS = 100;
+const SEATS = ['2C', '2B'];
 
 async function attemptBooking(userId) {
   try {

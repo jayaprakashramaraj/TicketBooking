@@ -18,10 +18,31 @@ export default function Booking() {
   const [bookedSeats, setBookedSeats] = useState<string[]>([]);
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
   const [bookingStatus, setBookingStatus] = useState<'idle' | 'booking' | 'processing' | 'success' | 'error'>('idle');
+  const [lastBookingId, setLastBookingId] = useState<string | null>(null);
+  const [pdfStatus, setPdfStatus] = useState<'waiting' | 'generating' | 'ready'>('waiting');
+  const [finalBookingDetails, setFinalBookingDetails] = useState<{ seats: string[], total: number } | null>(null);
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
   const seats = Array.from({ length: 40 }, (_, i) => `${Math.floor(i / 10) + 1}${String.fromCharCode(65 + (i % 10))}`);
+
+  const pollPdfStatus = async (bookingId: string) => {
+    setPdfStatus('generating');
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL.NOTIFICATION}/api/tickets/${bookingId}`, { method: 'HEAD' });
+        if (response.ok) {
+          clearInterval(interval);
+          setPdfStatus('ready');
+        }
+      } catch (err) {
+        console.error('PDF polling error:', err);
+      }
+    }, 2000);
+
+    // Stop after 2 minutes
+    setTimeout(() => clearInterval(interval), 120000);
+  };
 
   const pollBookingStatus = async (bookingId: string) => {
     const interval = setInterval(async () => {
@@ -31,7 +52,9 @@ export default function Booking() {
           const data = await response.json();
           if (data.status === 'Pending' || data.status === 'Confirmed') {
             clearInterval(interval);
+            setLastBookingId(bookingId);
             setBookingStatus('success');
+            pollPdfStatus(bookingId);
           } else if (data.status === 'Cancelled') {
             clearInterval(interval);
             setError('Booking was cancelled.');
@@ -86,6 +109,12 @@ export default function Booking() {
     setBookingStatus('booking');
     setError('');
 
+    // Capture details before they might get cleared
+    setFinalBookingDetails({
+      seats: [...selectedSeats],
+      total: selectedSeats.length * (show?.price || 0)
+    });
+
     try {
       const response = await fetch(`${API_BASE_URL.BOOKING}/api/bookings`, {
         method: 'POST',
@@ -103,6 +132,7 @@ export default function Booking() {
       if (response.status === 202) {
         setBookingStatus('processing');
         const data = await response.json();
+        setLastBookingId(data.bookingId);
         pollBookingStatus(data.bookingId);
       } else if (response.ok) {
         setBookingStatus('success');
@@ -131,25 +161,81 @@ export default function Booking() {
 
   if (bookingStatus === 'success') {
     return (
-      <Container className="py-5 text-center">
-        <Card className="max-w-md mx-auto p-5 shadow-lg border-0 bg-dark text-white rounded-3">
-          <Card.Body>
-            <CheckCircle size={80} className="text-success mb-4" />
-            <h2 className="display-6 fw-bold mb-3">Great Success!</h2>
-            <p className="text-secondary fs-5 mb-4">
-              Your tickets for <span className="text-primary fw-bold">{show.movieName}</span> are reserved.
-              Check your inbox for the PDF confirmation.
-            </p>
-            <Button 
-              variant="primary" 
-              size="lg" 
-              onClick={() => navigate('/')}
-              className="px-5 rounded-pill shadow"
-            >
-              Discover More Movies
-            </Button>
-          </Card.Body>
-        </Card>
+      <Container className="py-5">
+        <Row className="justify-content-center">
+          <Col md={8} lg={6}>
+            <Card className="shadow-lg border-0 bg-dark text-white rounded-3 overflow-hidden">
+              <div className="bg-success py-4 text-center">
+                <CheckCircle size={64} className="text-white mb-2" />
+                <h2 className="fw-bold mb-0">Booking Confirmed!</h2>
+              </div>
+              <Card.Body className="p-4 p-md-5">
+                <div className="mb-4 text-center">
+                  <h3 className="text-primary fw-bold mb-1">{show.movieName}</h3>
+                  <p className="text-secondary">{show.theaterName}</p>
+                </div>
+
+                <div className="bg-black bg-opacity-40 rounded-4 p-4 mb-4 border border-secondary border-opacity-20 shadow-inner">
+                  <Row className="gy-4">
+                    <Col xs={12} md={6}>
+                      <div className="d-flex flex-column">
+                        <label className="text-primary small text-uppercase fw-bold ls-1 mb-1">Date & Time</label>
+                        <div className="fw-medium text-white-50">{new Date(show.startTime).toLocaleString()}</div>
+                      </div>
+                    </Col>
+                    <Col xs={12} md={6}>
+                      <div className="d-flex flex-column">
+                        <label className="text-primary small text-uppercase fw-bold ls-1 mb-1">Seats Reserved</label>
+                        <div className="fw-bold text-success fs-5">{finalBookingDetails?.seats.join(', ')}</div>
+                      </div>
+                    </Col>
+                    <Col xs={12} md={6}>
+                      <div className="d-flex flex-column">
+                        <label className="text-primary small text-uppercase fw-bold ls-1 mb-1">Amount Paid</label>
+                        <div className="fw-bold text-white fs-5">${finalBookingDetails?.total}</div>
+                      </div>
+                    </Col>
+                    <Col xs={12} md={6}>
+                      <div className="d-flex flex-column">
+                        <label className="text-primary small text-uppercase fw-bold ls-1 mb-1">Booking Reference</label>
+                        <div className="text-white-50 font-monospace small text-truncate" title={lastBookingId || ''}>
+                          {lastBookingId}
+                        </div>
+                      </div>
+                    </Col>
+                  </Row>
+                </div>
+
+                <div className="d-grid gap-3">
+                  <Button 
+                    href={`${API_BASE_URL.NOTIFICATION}/api/tickets/${lastBookingId}`}
+                    target="_blank"
+                    variant="primary" 
+                    size="lg" 
+                    disabled={pdfStatus !== 'ready'}
+                    className="rounded-pill fw-bold"
+                  >
+                    {pdfStatus === 'ready' ? (
+                      <>Download PDF Ticket</>
+                    ) : (
+                      <>
+                        <Spinner animation="border" size="sm" className="me-2" />
+                        Generating PDF Ticket...
+                      </>
+                    )}
+                  </Button>
+                  <Button 
+                    variant="outline-secondary" 
+                    onClick={() => navigate('/')}
+                    className="rounded-pill"
+                  >
+                    Back to Home
+                  </Button>
+                </div>
+              </Card.Body>
+            </Card>
+          </Col>
+        </Row>
       </Container>
     );
   }

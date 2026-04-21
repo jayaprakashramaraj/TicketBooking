@@ -3,6 +3,7 @@ using System;
 using System.Threading.Tasks;
 using TicketBooking.Common.Events;
 using Notification.API.Services;
+using StackExchange.Redis;
 
 namespace Notification.API.Consumers
 {
@@ -10,11 +11,13 @@ namespace Notification.API.Consumers
     {
         private readonly IPdfGenerator _pdfGenerator;
         private readonly IEmailService _emailService;
+        private readonly IDatabase _redis;
 
-        public BookingConfirmedConsumer(IPdfGenerator pdfGenerator, IEmailService emailService)
+        public BookingConfirmedConsumer(IPdfGenerator pdfGenerator, IEmailService emailService, IConnectionMultiplexer redis)
         {
             _pdfGenerator = pdfGenerator;
             _emailService = emailService;
+            _redis = redis.GetDatabase();
         }
 
         public async Task Consume(ConsumeContext<BookingConfirmed> context)
@@ -28,6 +31,10 @@ namespace Notification.API.Consumers
                 message.ShowTime,
                 message.SeatNumbers,
                 message.TotalAmount);
+
+            // Save PDF to Redis with 30-day expiration
+            await _redis.StringSetAsync($"ticket:{message.BookingId}", pdf, TimeSpan.FromDays(30));
+            Console.WriteLine($"Saved PDF ticket to Redis for Booking: {message.BookingId}");
 
             await _emailService.SendEmailWithAttachmentAsync(
                 message.CustomerEmail,

@@ -4,7 +4,8 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Booking from './pages/Booking';
 import Admin from './pages/Admin';
-import { User, LogOut, Ticket } from 'lucide-react';
+import MyBookings from './pages/MyBookings';
+import { User, LogOut, Ticket, ClipboardList } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Navbar, Nav, Container, Button, Dropdown } from 'react-bootstrap';
 
@@ -46,6 +47,10 @@ function App() {
                         <span>{user.fullName}</span>
                       </Dropdown.Toggle>
                       <Dropdown.Menu variant="dark">
+                        <Dropdown.Item as={Link as any} to="/my-bookings">
+                          <ClipboardList size={16} className="me-2" /> My Bookings
+                        </Dropdown.Item>
+                        <Dropdown.Divider className="bg-secondary opacity-25" />
                         <Dropdown.Item onClick={handleLogout} className="text-danger">
                           <LogOut size={16} className="me-2" /> Logout
                         </Dropdown.Item>
@@ -71,6 +76,7 @@ function App() {
               <Route path="/register" element={<Register />} />
               <Route path="/book/:showId" element={<Booking />} />
               <Route path="/admin" element={<Admin />} />
+              <Route path="/my-bookings" element={<MyBookings />} />
             </Routes>
           </Container>
         </main>

@@ -93,5 +93,16 @@ namespace Booking.API.Controllers
 
             return Ok(bookedSeats);
         }
+
+        [HttpGet("user/{email}")]
+        public async Task<IActionResult> GetByUser(string email)
+        {
+            var bookings = await _context.Bookings
+                .Where(b => b.CustomerEmail == email)
+                .OrderByDescending(b => b.ShowTime)
+                .ToListAsync();
+
+            return Ok(bookings);
+        }
     }
 }

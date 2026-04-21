@@ -2,13 +2,14 @@ services:
   rabbitmq:
     image: rabbitmq:3-management
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "5673:5672"
+      - "15673:15672"
     healthcheck:
       test: rabbitmq-diagnostics -q ping
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 20s
 
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
@@ -17,31 +18,41 @@ services:
       MSSQL_SA_PASSWORD: "YourStrong@Passw0rd"
     ports:
       - "1434:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
     healthcheck:
       test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P YourStrong@Passw0rd -Q "SELECT 1" -C || exit 1
       interval: 10s
       timeout: 5s
       retries: 10
+      start_period: 10s
 
   mongodb:
     image: mongo:latest
     ports:
       - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
     healthcheck:
       test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 5s
 
   redis:
     image: redis:alpine
+    command: ["redis-server", "--appendonly", "yes"]
     ports:
       - "6380:6379"
+    volumes:
+      - redis_data:/data
     healthcheck:
       test: redis-cli ping
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 10s
 
   identity.api:
     build:
@@ -105,9 +116,12 @@ services:
     ports:
       - "5004:8080"
     environment:
+      ConnectionStrings__Redis: "redis:6379"
       RabbitMQHost: rabbitmq
     depends_on:
       rabbitmq:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   nginx:
@@ -118,6 +132,7 @@ services:
       - "5002:80"
     depends_on:
       - booking.api
+      - notification.api
 
   frontend:
     build:
@@ -129,3 +144,8 @@ services:
       - identity.api
       - catalog.api
       - booking.api
+
+volumes:
+  sqlserver_data:
+  mongodb_data:
+  redis_data:
