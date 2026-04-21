@@ -17,11 +17,42 @@ export default function Booking() {
   const [show, setShow] = useState<Show | null>(null);
   const [bookedSeats, setBookedSeats] = useState<string[]>([]);
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
-  const [bookingStatus, setBookingStatus] = useState<'idle' | 'booking' | 'success' | 'error'>('idle');
+  const [bookingStatus, setBookingStatus] = useState<'idle' | 'booking' | 'processing' | 'success' | 'error'>('idle');
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
   const seats = Array.from({ length: 40 }, (_, i) => `${Math.floor(i / 10) + 1}${String.fromCharCode(65 + (i % 10))}`);
+
+  const pollBookingStatus = async (bookingId: string) => {
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL.BOOKING}/api/bookings/${bookingId}/status`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.status === 'Pending' || data.status === 'Confirmed') {
+            clearInterval(interval);
+            setBookingStatus('success');
+          } else if (data.status === 'Cancelled') {
+            clearInterval(interval);
+            setError('Booking was cancelled.');
+            setBookingStatus('error');
+          }
+          // Continue polling if 'Processing'
+        }
+      } catch (err) {
+        console.error('Polling error:', err);
+      }
+    }, 2000); // Poll every 2 seconds
+
+    // Stop polling after 30 seconds (timeout)
+    setTimeout(() => {
+      clearInterval(interval);
+      if (bookingStatus === 'processing') {
+        setError('Booking is taking longer than expected. Please check your email later.');
+        setBookingStatus('error');
+      }
+    }, 30000);
+  };
 
   useEffect(() => {
     // Fetch show details
@@ -69,11 +100,18 @@ export default function Booking() {
         })
       });
 
-      if (response.ok) {
+      if (response.status === 202) {
+        setBookingStatus('processing');
+        const data = await response.json();
+        pollBookingStatus(data.bookingId);
+      } else if (response.ok) {
         setBookingStatus('success');
+      } else if (response.status === 409) {
+        setError('These seats were just taken! Please select others.');
+        setBookingStatus('error');
       } else {
         const msg = await response.text();
-        setError(msg || 'Booking failed. Seats might be taken.');
+        setError(msg || 'Booking failed.');
         setBookingStatus('error');
       }
     } catch (err) {
@@ -210,7 +248,7 @@ export default function Booking() {
               )}
 
               <Button
-                disabled={selectedSeats.length === 0 || bookingStatus === 'booking'}
+                disabled={selectedSeats.length === 0 || bookingStatus === 'booking' || bookingStatus === 'processing'}
                 onClick={handleBooking}
                 size="lg"
                 variant="primary"
@@ -220,6 +258,11 @@ export default function Booking() {
                   <>
                     <Spinner animation="border" size="sm" className="me-2" />
                     Reserving Seats...
+                  </>
+                ) : bookingStatus === 'processing' ? (
+                  <>
+                    <Spinner animation="border" size="sm" className="me-2" />
+                    Finalizing...
                   </>
                 ) : (
                   <>

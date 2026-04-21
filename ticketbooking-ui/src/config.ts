@@ -1,10 +1,11 @@
-// Microservice endpoints
-// When running in Docker, we still use localhost because the browser 
-// is the one making the calls from your machine to the published Docker ports.
+// Dynamic API detection
+// Uses the hostname from the browser URL to allow access via Local IP (WiFi)
+const hostname = window.location.hostname;
+
 const API_BASE_URL = {
-  IDENTITY: 'http://localhost:5000',
-  CATALOG: 'http://localhost:5001',
-  BOOKING: 'http://localhost:5002',
+  IDENTITY: `http://${hostname}:5000`,
+  CATALOG: `http://${hostname}:5001`,
+  BOOKING: `http://${hostname}:5002`,
 };
 
 export default API_BASE_URL;

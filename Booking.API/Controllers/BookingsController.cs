@@ -10,6 +10,8 @@ using MassTransit;
 using TicketBooking.Common.Events;
 using Microsoft.EntityFrameworkCore;
 
+using Booking.API.Services;
+
 namespace Booking.API.Controllers
 {
     [ApiController]
@@ -18,11 +20,13 @@ namespace Booking.API.Controllers
     {
         private readonly BookingDbContext _context;
         private readonly IPublishEndpoint _publishEndpoint;
+        private readonly ISeatReservationService _reservationService;
 
-        public BookingsController(BookingDbContext context, IPublishEndpoint publishEndpoint)
+        public BookingsController(BookingDbContext context, IPublishEndpoint publishEndpoint, ISeatReservationService reservationService)
         {
             _context = context;
             _publishEndpoint = publishEndpoint;
+            _reservationService = reservationService;
         }
 
         [HttpPost]
@@ -31,77 +35,30 @@ namespace Booking.API.Controllers
             if (request.SeatNumbers == null || !request.SeatNumbers.Any())
                 return BadRequest("No seats selected.");
 
-            // Start a database transaction to ensure atomicity and prevent double booking
-            using var transaction = await _context.Database.BeginTransactionAsync();
+            var bookingId = Guid.NewGuid();
 
-            try
+            // Phase 1: Try to reserve seats in Redis (In-memory, high scale)
+            var reserved = await _reservationService.ReserveSeatsAsync(request.ShowId, request.SeatNumbers, bookingId, TimeSpan.FromMinutes(10));
+
+            if (!reserved)
             {
-                // Check if any of the requested seats are already booked for this show
-                var alreadyBooked = await _context.Seats
-                    .Where(s => s.ShowId == request.ShowId && request.SeatNumbers.Contains(s.SeatNumber) && s.IsBooked)
-                    .ToListAsync();
-
-                if (alreadyBooked.Any())
-                {
-                    return BadRequest($"Seats {string.Join(", ", alreadyBooked.Select(s => s.SeatNumber))} are already booked.");
-                }
-
-                var bookingId = Guid.NewGuid();
-
-                // Reserve the seats
-                foreach (var seatNum in request.SeatNumbers)
-                {
-                    _context.Seats.Add(new Seat
-                    {
-                        Id = Guid.NewGuid(),
-                        ShowId = request.ShowId,
-                        SeatNumber = seatNum,
-                        IsBooked = true,
-                        BookingId = bookingId
-                    });
-                }
-
-                // Create the booking record
-                var booking = new BookingRecord
-                {
-                    Id = bookingId,
-                    ShowId = request.ShowId,
-                    ShowName = request.ShowName,
-                    ShowTime = request.ShowTime,
-                    CustomerEmail = request.CustomerEmail,
-                    SeatNumbers = request.SeatNumbers,
-                    TotalAmount = request.TotalAmount,
-                    Status = BookingStatus.Pending,
-                    CreatedAt = DateTime.UtcNow
-                };
-
-                _context.Bookings.Add(booking);
-
-                // Save changes within the transaction
-                await _context.SaveChangesAsync();
-
-                // Commit the transaction
-                await transaction.CommitAsync();
-
-                // Publish event to the message broker
-                await _publishEndpoint.Publish(new BookingInitiated
-                {
-                    BookingId = booking.Id,
-                    CustomerEmail = booking.CustomerEmail,
-                    TotalAmount = booking.TotalAmount,
-                    SeatNumbers = booking.SeatNumbers,
-                    ShowName = booking.ShowName,
-                    ShowTime = booking.ShowTime
-                });
-
-                return Ok(new { BookingId = bookingId, Status = "Pending" });
+                return Conflict("One or more selected seats are already being booked. Please try different seats.");
             }
-            catch (Exception ex)
+
+            // Phase 2: Publish event for background processing (Asynchronous)
+            await _publishEndpoint.Publish(new BookingRequested
             {
-                // Rollback if something goes wrong
-                await transaction.RollbackAsync();
-                return StatusCode(500, "An error occurred while processing your booking.");
-            }
+                BookingId = bookingId,
+                ShowId = request.ShowId,
+                ShowName = request.ShowName,
+                ShowTime = request.ShowTime,
+                CustomerEmail = request.CustomerEmail,
+                SeatNumbers = request.SeatNumbers,
+                TotalAmount = request.TotalAmount
+            });
+
+            // Return 202 Accepted immediately
+            return AcceptedAtAction(nameof(GetBooking), new { id = bookingId }, new { BookingId = bookingId, Status = "Processing" });
         }
 
         [HttpGet("{id}")]
@@ -110,6 +67,20 @@ namespace Booking.API.Controllers
             var booking = await _context.Bookings.FirstOrDefaultAsync(b => b.Id == id);
             if (booking == null) return NotFound();
             return Ok(booking);
+        }
+
+        [HttpGet("{id}/status")]
+        public async Task<IActionResult> GetBookingStatus(Guid id)
+        {
+            var booking = await _context.Bookings.FirstOrDefaultAsync(b => b.Id == id);
+            
+            if (booking == null)
+            {
+                // If not in DB yet, it might still be in the queue
+                return Ok(new { BookingId = id, Status = "Processing" });
+            }
+
+            return Ok(new { BookingId = id, Status = booking.Status.ToString() });
         }
 
         [HttpGet("shows/{showId}/seats")]

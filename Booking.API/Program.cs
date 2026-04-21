@@ -4,8 +4,14 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Booking.API.Consumers;
 using Booking.API.Data;
+using Booking.API.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using StackExchange.Redis;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using System.Text.Json;
+using RabbitMQ.Client;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +19,29 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// Health Checks
+var sqlConnection = builder.Configuration.GetConnectionString("DefaultConnection")!;
+var redisConnection = builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379";
+var rabbitMQHost = builder.Configuration["RabbitMQHost"] ?? "localhost";
+
+builder.Services.AddHealthChecks()
+    .AddSqlServer(sqlConnection, name: "sqlserver")
+    .AddRedis(redisConnection, name: "redis")
+    .AddRabbitMQ(sp => 
+    {
+        var factory = new ConnectionFactory() 
+        { 
+            Uri = new Uri($"amqp://guest:guest@{rabbitMQHost}:5672")
+        };
+        // Use Task.Run to ensure we don't block the thread in a way that causes deadlocks in some sync contexts
+        return Task.Run(() => factory.CreateConnectionAsync()).GetAwaiter().GetResult();
+    }, name: "rabbitmq");
+
+// Redis Configuration
+var redisConnectionString = builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379";
+builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(redisConnectionString));
+builder.Services.AddScoped<ISeatReservationService, RedisSeatReservationService>();
 
 builder.Services.AddDbContext<BookingDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -27,14 +56,27 @@ builder.Services.AddCors(options =>
 builder.Services.AddMassTransit(x =>
 {
     x.AddConsumer<PaymentCompletedConsumer>();
+    x.AddConsumer<BookingRequestedConsumer>();
+    x.AddConsumer<PaymentFailedConsumer>();
 
     x.UsingRabbitMq((context, cfg) =>
     {
         var rabbitMQHost = builder.Configuration["RabbitMQHost"] ?? "localhost";
         cfg.Host(rabbitMQHost, "/");
+        
+        cfg.ReceiveEndpoint("booking-requested-queue", e =>
+        {
+            e.ConfigureConsumer<BookingRequestedConsumer>(context);
+        });
+
         cfg.ReceiveEndpoint("payment-completed-queue", e =>
         {
             e.ConfigureConsumer<PaymentCompletedConsumer>(context);
+        });
+
+        cfg.ReceiveEndpoint("booking-payment-failed-queue", e =>
+        {
+            e.ConfigureConsumer<PaymentFailedConsumer>(context);
         });
     });
 });
@@ -56,7 +98,7 @@ for (int i = 0; i < 10; i++)
             break;
         }
     }
-    catch (Exception ex)
+    catch (Exception)
     {
         Console.WriteLine($"Database connection failed. Retrying in 5s... ({i + 1}/10)");
         Thread.Sleep(5000);
@@ -70,6 +112,27 @@ app.UseSwaggerUI();
 
 //app.UseHttpsRedirection();
 app.UseAuthorization();
+
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        var response = new
+        {
+            status = report.Status.ToString(),
+            checks = report.Entries.Select(e => new
+            {
+                component = e.Key,
+                status = e.Value.Status.ToString(),
+                description = e.Value.Description
+            }),
+            totalDuration = report.TotalDuration
+        };
+        await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+    }
+});
+
 app.MapControllers();
 
 app.Run();
