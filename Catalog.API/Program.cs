@@ -21,8 +21,9 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // MongoDB Configuration
+var mongoConnection = Environment.GetEnvironmentVariable("MONGO_CONNECTION") ?? builder.Configuration.GetConnectionString("MongoConnection") ?? "mongodb://localhost:27017";
 builder.Services.AddSingleton<IMongoClient>(sp => 
-    new MongoClient(builder.Configuration.GetConnectionString("MongoConnection")));
+    new MongoClient(mongoConnection));
 builder.Services.AddScoped(sp => 
     sp.GetRequiredService<IMongoClient>().GetDatabase("CatalogDb"));
 
@@ -35,7 +36,10 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-app.UseCors("AllowAll");
+if (Environment.GetEnvironmentVariable("DISABLE_CORS") != "true")
+{
+    app.UseCors("AllowAll");
+}
 
 // Seed MongoDB
 using (var scope = app.Services.CreateScope())

@@ -1,15 +1,9 @@
 using System;
 using System.Collections.Generic;
+using Booking.Domain.Enums;
 
-namespace Booking.API.Domain
+namespace Booking.Domain.Entities
 {
-    public enum BookingStatus
-    {
-        Pending,
-        Confirmed,
-        Cancelled
-    }
-
     public class BookingRecord
     {
         public Guid Id { get; set; }

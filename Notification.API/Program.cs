@@ -5,6 +5,10 @@ using Microsoft.Extensions.Hosting;
 using Notification.API.Consumers;
 using Notification.API.Services;
 using StackExchange.Redis;
+using QuestPDF.Infrastructure;
+
+// Set QuestPDF License
+QuestPDF.Settings.License = LicenseType.Community;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,8 +18,18 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // Redis Configuration
-var redisConnectionString = builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379";
-builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(redisConnectionString));
+var redisHost = Environment.GetEnvironmentVariable("REDIS_HOST") ?? builder.Configuration.GetConnectionString("Redis")!;
+
+try 
+{
+    var multiplexer = ConnectionMultiplexer.Connect(redisHost);
+    builder.Services.AddSingleton<IConnectionMultiplexer>(multiplexer);
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Warning: Could not connect to Redis at {redisHost}. Error: {ex.Message}");
+    builder.Services.AddSingleton<IConnectionMultiplexer>(sp => null!);
+}
 
 builder.Services.AddSingleton<IPdfGenerator, PdfGenerator>();
 builder.Services.AddSingleton<IEmailService, EmailService>();
@@ -33,8 +47,27 @@ builder.Services.AddMassTransit(x =>
 
     x.UsingRabbitMq((context, cfg) =>
     {
-        var rabbitMQHost = builder.Configuration["RabbitMQHost"] ?? "localhost";
-        cfg.Host(rabbitMQHost, "/");
+        var rabbitMQHost = Environment.GetEnvironmentVariable("RABBITMQ_HOST") ?? builder.Configuration["RabbitMQHost"] ?? "localhost";
+        var rabbitMQPortStr = Environment.GetEnvironmentVariable("RABBITMQ_PORT") ?? builder.Configuration["RabbitMQPort"];
+        ushort? rabbitMQPort = ushort.TryParse(rabbitMQPortStr, out var portValue) ? portValue : null;
+
+        var rabbitMQUser = Environment.GetEnvironmentVariable("RABBITMQ_USER") ?? builder.Configuration["RabbitMQUser"] ?? "guest";
+        var rabbitMQPass = Environment.GetEnvironmentVariable("RABBITMQ_PASS") ?? builder.Configuration["RabbitMQPass"] ?? "guest";
+
+        if (rabbitMQPort.HasValue)
+        {
+            cfg.Host(rabbitMQHost, rabbitMQPort.Value, "/", h => {
+                h.Username(rabbitMQUser);
+                h.Password(rabbitMQPass);
+            });
+        }
+        else
+        {
+            cfg.Host(rabbitMQHost, "/", h => {
+                h.Username(rabbitMQUser);
+                h.Password(rabbitMQPass);
+            });
+        }
         cfg.ReceiveEndpoint("booking-confirmed-queue", e =>
         {
             e.ConfigureConsumer<BookingConfirmedConsumer>(context);
@@ -44,7 +77,10 @@ builder.Services.AddMassTransit(x =>
 
 var app = builder.Build();
 
-app.UseCors("AllowAll");
+if (Environment.GetEnvironmentVariable("DISABLE_CORS") != "true")
+{
+    app.UseCors("AllowAll");
+}
 
 // Configure the HTTP request pipeline.
 app.UseSwagger();

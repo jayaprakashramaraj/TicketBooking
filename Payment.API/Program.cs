@@ -14,8 +14,17 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// Connection Strings
+var sqlConnection = Environment.GetEnvironmentVariable("DB_CONNECTION") ?? builder.Configuration.GetConnectionString("DefaultConnection")!;
+var rabbitMQHost = Environment.GetEnvironmentVariable("RABBITMQ_HOST") ?? builder.Configuration["RabbitMQHost"] ?? "localhost";
+var rabbitMQPortStr = Environment.GetEnvironmentVariable("RABBITMQ_PORT") ?? builder.Configuration["RabbitMQPort"];
+ushort? rabbitMQPort = ushort.TryParse(rabbitMQPortStr, out var portValue) ? portValue : null;
+
+var rabbitMQUser = Environment.GetEnvironmentVariable("RABBITMQ_USER") ?? builder.Configuration["RabbitMQUser"] ?? "guest";
+var rabbitMQPass = Environment.GetEnvironmentVariable("RABBITMQ_PASS") ?? builder.Configuration["RabbitMQPass"] ?? "guest";
+
 builder.Services.AddDbContext<PaymentDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(sqlConnection));
 
 // CORS for React App
 builder.Services.AddCors(options =>
@@ -30,8 +39,20 @@ builder.Services.AddMassTransit(x =>
 
     x.UsingRabbitMq((context, cfg) =>
     {
-        var rabbitMQHost = builder.Configuration["RabbitMQHost"] ?? "localhost";
-        cfg.Host(rabbitMQHost, "/");
+        if (rabbitMQPort.HasValue)
+        {
+            cfg.Host(rabbitMQHost, rabbitMQPort.Value, "/", h => {
+                h.Username(rabbitMQUser);
+                h.Password(rabbitMQPass);
+            });
+        }
+        else
+        {
+            cfg.Host(rabbitMQHost, "/", h => {
+                h.Username(rabbitMQUser);
+                h.Password(rabbitMQPass);
+            });
+        }
         cfg.ReceiveEndpoint("booking-initiated-queue", e =>
         {
             e.ConfigureConsumer<BookingInitiatedConsumer>(context);
@@ -41,10 +62,13 @@ builder.Services.AddMassTransit(x =>
 
 var app = builder.Build();
 
-app.UseCors("AllowAll");
+if (Environment.GetEnvironmentVariable("DISABLE_CORS") != "true")
+{
+    app.UseCors("AllowAll");
+}
 
 // Retry logic for database initialization
-for (int i = 0; i < 10; i++)
+for (int i = 0; i < 15; i++)
 {
     try
     {
@@ -58,9 +82,9 @@ for (int i = 0; i < 10; i++)
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Database connection failed. Retrying in 5s... ({i + 1}/10)");
+        Console.WriteLine($"Database connection failed: {ex.Message}. Retrying in 5s... ({i + 1}/15)");
         Thread.Sleep(5000);
-        if (i == 9) throw;
+        if (i == 14) throw;
     }
 }
 

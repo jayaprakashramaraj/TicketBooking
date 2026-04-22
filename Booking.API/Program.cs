@@ -3,15 +3,20 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Booking.API.Consumers;
-using Booking.API.Data;
-using Booking.API.Services;
+using Booking.Infrastructure.Data;
+using Booking.Infrastructure.Repositories;
+using Booking.Infrastructure.Services;
+using Booking.Infrastructure.MessageBrokers;
+using Booking.Domain.Repositories;
+using Booking.Domain.Services;
+using Booking.Application.Interfaces;
+using Booking.Application.Services;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using StackExchange.Redis;
+using RabbitMQ.Client;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using System.Text.Json;
-using RabbitMQ.Client;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,30 +26,57 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // Health Checks
-var sqlConnection = builder.Configuration.GetConnectionString("DefaultConnection")!;
-var redisConnection = builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379";
-var rabbitMQHost = builder.Configuration["RabbitMQHost"] ?? "localhost";
+var sqlConnection = Environment.GetEnvironmentVariable("DB_CONNECTION") ?? builder.Configuration.GetConnectionString("DefaultConnection")!;
+var redisHost = Environment.GetEnvironmentVariable("REDIS_HOST") ?? builder.Configuration.GetConnectionString("Redis") ?? "localhost";
+
+var rabbitMQHost = Environment.GetEnvironmentVariable("RABBITMQ_HOST") ?? builder.Configuration["RabbitMQHost"] ?? "localhost";
+var rabbitMQPortStr = Environment.GetEnvironmentVariable("RABBITMQ_PORT") ?? builder.Configuration["RabbitMQPort"];
+ushort? rabbitMQPort = ushort.TryParse(rabbitMQPortStr, out var portValue) ? portValue : null;
+
+var rabbitMQUser = Environment.GetEnvironmentVariable("RABBITMQ_USER") ?? builder.Configuration["RabbitMQUser"] ?? "guest";
+var rabbitMQPass = Environment.GetEnvironmentVariable("RABBITMQ_PASS") ?? builder.Configuration["RabbitMQPass"] ?? "guest";
+
+var rabbitConnectionString = rabbitMQPort.HasValue 
+    ? $"amqp://{rabbitMQUser}:{rabbitMQPass}@{rabbitMQHost}:{rabbitMQPort}"
+    : $"amqp://{rabbitMQUser}:{rabbitMQPass}@{rabbitMQHost}";
 
 builder.Services.AddHealthChecks()
     .AddSqlServer(sqlConnection, name: "sqlserver")
-    .AddRedis(redisConnection, name: "redis")
+    .AddRedis(redisHost, name: "redis")
     .AddRabbitMQ(sp => 
     {
-        var factory = new ConnectionFactory() 
-        { 
-            Uri = new Uri($"amqp://guest:guest@{rabbitMQHost}:5672")
-        };
-        // Use Task.Run to ensure we don't block the thread in a way that causes deadlocks in some sync contexts
-        return Task.Run(() => factory.CreateConnectionAsync()).GetAwaiter().GetResult();
+        var factory = new ConnectionFactory() { Uri = new Uri(rabbitConnectionString) };
+        return factory.CreateConnectionAsync().GetAwaiter().GetResult();
     }, name: "rabbitmq");
 
-// Redis Configuration
-var redisConnectionString = builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379";
-builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(redisConnectionString));
+// Infrastructure Configuration
+IConnectionMultiplexer? multiplexer = null;
+try 
+{
+    multiplexer = ConnectionMultiplexer.Connect(redisHost);
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Warning: Could not connect to Redis at {redisHost}. Error: {ex.Message}");
+}
+
+if (multiplexer != null)
+{
+    builder.Services.AddSingleton<IConnectionMultiplexer>(multiplexer);
+}
+else
+{
+    builder.Services.AddSingleton<IConnectionMultiplexer>(sp => null!); 
+}
+
+builder.Services.AddScoped<IBookingRepository, BookingRepository>();
 builder.Services.AddScoped<ISeatReservationService, RedisSeatReservationService>();
+builder.Services.AddScoped<IEventBus, EventBus>();
+builder.Services.AddScoped<IBookingService, BookingService>();
+builder.Services.AddScoped<ISeatService, SeatService>();
 
 builder.Services.AddDbContext<BookingDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(sqlConnection));
 
 // CORS for React App
 builder.Services.AddCors(options =>
@@ -61,8 +93,20 @@ builder.Services.AddMassTransit(x =>
 
     x.UsingRabbitMq((context, cfg) =>
     {
-        var rabbitMQHost = builder.Configuration["RabbitMQHost"] ?? "localhost";
-        cfg.Host(rabbitMQHost, "/");
+        if (rabbitMQPort.HasValue)
+        {
+            cfg.Host(rabbitMQHost, rabbitMQPort.Value, "/", h => {
+                h.Username(rabbitMQUser);
+                h.Password(rabbitMQPass);
+            });
+        }
+        else
+        {
+            cfg.Host(rabbitMQHost, "/", h => {
+                h.Username(rabbitMQUser);
+                h.Password(rabbitMQPass);
+            });
+        }
         
         cfg.ReceiveEndpoint("booking-requested-queue", e =>
         {
@@ -80,10 +124,16 @@ builder.Services.AddMassTransit(x =>
         });
     });
 });
+// Explicitly add MassTransit health checks
+builder.Services.AddOptions<MassTransitHostOptions>().Configure(options => options.WaitUntilStarted = true);
+
 
 var app = builder.Build();
 
-app.UseCors("AllowAll");
+if (Environment.GetEnvironmentVariable("DISABLE_CORS") != "true")
+{
+    app.UseCors("AllowAll");
+}
 
 // Retry logic for database initialization
 for (int i = 0; i < 10; i++)

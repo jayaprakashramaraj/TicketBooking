@@ -1,6 +1,6 @@
 using System;
 
-namespace Booking.API.Domain
+namespace Booking.Domain.Entities
 {
     public class Seat
     {

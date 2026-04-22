@@ -14,11 +14,15 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// Connection String
+var sqlConnection = Environment.GetEnvironmentVariable("DB_CONNECTION") ?? builder.Configuration.GetConnectionString("DefaultConnection")!;
+
 builder.Services.AddDbContext<IdentityDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(sqlConnection));
 
 // JWT Configuration
-var key = Encoding.ASCII.GetBytes("YourSuperSecretKeyThatIsAtLeast32CharsLong!");
+var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? builder.Configuration["JwtSecret"] ?? "YourSuperSecretKeyThatIsAtLeast32CharsLong!";
+var key = Encoding.ASCII.GetBytes(jwtSecret);
 builder.Services.AddAuthentication(x =>
 {
     x.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -46,7 +50,10 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-app.UseCors("AllowAll");
+if (Environment.GetEnvironmentVariable("DISABLE_CORS") != "true")
+{
+    app.UseCors("AllowAll");
+}
 
 // Retry logic for database initialization
 for (int i = 0; i < 10; i++)
@@ -63,7 +70,7 @@ for (int i = 0; i < 10; i++)
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Database connection failed. Retrying in 5s... ({i + 1}/10)");
+        Console.WriteLine($"Database connection failed: {ex.Message}. Retrying in 5s... ({i + 1}/10)");
         Thread.Sleep(5000);
         if (i == 9) throw;
     }

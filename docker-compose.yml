@@ -1,59 +1,4 @@
 services:
-  rabbitmq:
-    image: rabbitmq:3-management
-    ports:
-      - "5673:5672"
-      - "15673:15672"
-    healthcheck:
-      test: rabbitmq-diagnostics -q ping
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 20s
-
-  sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    environment:
-      ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "YourStrong@Passw0rd"
-    ports:
-      - "1434:1433"
-    volumes:
-      - sqlserver_data:/var/opt/mssql
-    healthcheck:
-      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P YourStrong@Passw0rd -Q "SELECT 1" -C || exit 1
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
-
-  mongodb:
-    image: mongo:latest
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongodb_data:/data/db
-    healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
-
-  redis:
-    image: redis:alpine
-    command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      - "6380:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: redis-cli ping
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
-
   identity.api:
     build:
       context: .
@@ -61,7 +6,10 @@ services:
     ports:
       - "5000:8080"
     environment:
-      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=IdentityDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=False;"
+      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=IdentityDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Connect Timeout=30;Encrypt=False;"
+      JWT_SECRET: "YourSuperSecretKeyThatIsAtLeast32CharsLong!"
+      RABBITMQ_PORT: "5672"
+      DISABLE_CORS: "true"
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -74,6 +22,7 @@ services:
       - "5001:8080"
     environment:
       ConnectionStrings__MongoConnection: "mongodb://mongodb:27017"
+      DISABLE_CORS: "true"
     depends_on:
       mongodb:
         condition: service_healthy
@@ -83,9 +32,11 @@ services:
       context: .
       dockerfile: Booking.API/Dockerfile
     environment:
-      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=BookingDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=False;"
-      ConnectionStrings__Redis: "redis:6379"
-      RabbitMQHost: rabbitmq
+      DB_CONNECTION: "Server=sqlserver;Database=BookingDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Connect Timeout=30;Encrypt=False;"
+      REDIS_HOST: "redis:6379"
+      RABBITMQ_HOST: "rabbitmq"
+      RABBITMQ_PORT: "5672"
+      DISABLE_CORS: "true"
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -101,8 +52,10 @@ services:
     ports:
       - "5003:8080"
     environment:
-      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=PaymentDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=False;"
-      RabbitMQHost: rabbitmq
+      DB_CONNECTION: "Server=sqlserver;Database=PaymentDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Connect Timeout=30;Encrypt=False;"
+      RABBITMQ_HOST: "rabbitmq"
+      RABBITMQ_PORT: "5672"
+      DISABLE_CORS: "true"
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -116,8 +69,10 @@ services:
     ports:
       - "5004:8080"
     environment:
-      ConnectionStrings__Redis: "redis:6379"
-      RabbitMQHost: rabbitmq
+      REDIS_HOST: "redis:6379"
+      RABBITMQ_HOST: "rabbitmq"
+      RABBITMQ_PORT: "5672"
+      DISABLE_CORS: "true"
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -131,6 +86,8 @@ services:
     ports:
       - "5002:80"
     depends_on:
+      - identity.api
+      - catalog.api
       - booking.api
       - notification.api
 
@@ -144,6 +101,27 @@ services:
       - identity.api
       - catalog.api
       - booking.api
+
+  # External Infrastructure Services
+  rabbitmq:
+    extends:
+      file: docker-compose.infra.yml
+      service: rabbitmq
+
+  sqlserver:
+    extends:
+      file: docker-compose.infra.yml
+      service: sqlserver
+
+  mongodb:
+    extends:
+      file: docker-compose.infra.yml
+      service: mongodb
+
+  redis:
+    extends:
+      file: docker-compose.infra.yml
+      service: redis
 
 volumes:
   sqlserver_data:

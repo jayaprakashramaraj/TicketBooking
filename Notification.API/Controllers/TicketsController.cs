@@ -20,13 +20,16 @@ namespace Notification.API.Controllers
         [HttpHead("{id}")]
         public async Task<IActionResult> DownloadTicket(Guid id)
         {
+            Console.WriteLine($"Checking ticket in Redis for ID: {id}");
             var pdfData = await _redis.StringGetAsync($"ticket:{id}");
 
             if (pdfData.IsNull)
             {
+                Console.WriteLine($"Ticket NOT FOUND in Redis for ID: {id}");
                 return NotFound("Ticket not found or expired.");
             }
 
+            Console.WriteLine($"Ticket FOUND in Redis for ID: {id}");
             if (Request.Method == "HEAD")
             {
                 return Ok();

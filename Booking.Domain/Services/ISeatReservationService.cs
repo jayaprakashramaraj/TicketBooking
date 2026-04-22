@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace Booking.API.Services
+namespace Booking.Domain.Services
 {
     public interface ISeatReservationService
     {
