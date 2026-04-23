@@ -1,44 +1,36 @@
 <Solution>
-  <Folder Name="/Booking/">
+  <Folder Name="/src/" />
+  <Folder Name="/src/Booking/">
     <Project Path="src\Booking\Booking.API\Booking.API.csproj" />
     <Project Path="src\Booking\Booking.Application\Booking.Application.csproj" />
     <Project Path="src\Booking\Booking.Domain\Booking.Domain.csproj" />
     <Project Path="src\Booking\Booking.Infrastructure\Booking.Infrastructure.csproj" />
   </Folder>
-  <Folder Name="/Catalog/">
-    <Project Path="src\Catalog\Catalog.API\Catalog.API.csproj" />
-  </Folder>
-  <Folder Name="/Identity/">
-    <Project Path="src\Identity\Identity.API\Identity.API.csproj" />
-  </Folder>
-  <Folder Name="/Notification/">
-    <Project Path="src\Notification\Notification.API\Notification.API.csproj" />
-  </Folder>
-  <Folder Name="/Payment/">
-    <Project Path="src\Payment\Payment.API\Payment.API.csproj" />
-  </Folder>
-  <Folder Name="/Shared/">
-    <Project Path="src\Shared\TicketBooking.Common\TicketBooking.Common.csproj" />
-  </Folder>
-  <Folder Name="/src/" />
   <Folder Name="/src/Catalog/">
     <Project Path="src/Catalog/Catalog.Application/Catalog.Application.csproj" />
     <Project Path="src/Catalog/Catalog.Domain/Catalog.Domain.csproj" />
     <Project Path="src/Catalog/Catalog.Infrastructure/Catalog.Infrastructure.csproj" />
+    <Project Path="src\Catalog\Catalog.API\Catalog.API.csproj" />
   </Folder>
   <Folder Name="/src/Identity/">
     <Project Path="src/Identity/Identity.Application/Identity.Application.csproj" />
     <Project Path="src/Identity/Identity.Domain/Identity.Domain.csproj" />
     <Project Path="src/Identity/Identity.Infrastructure/Identity.Infrastructure.csproj" />
+    <Project Path="src\Identity\Identity.API\Identity.API.csproj" />
   </Folder>
   <Folder Name="/src/Notification/">
     <Project Path="src/Notification/Notification.Application/Notification.Application.csproj" />
     <Project Path="src/Notification/Notification.Domain/Notification.Domain.csproj" />
     <Project Path="src/Notification/Notification.Infrastructure/Notification.Infrastructure.csproj" />
+    <Project Path="src\Notification\Notification.API\Notification.API.csproj" />
   </Folder>
   <Folder Name="/src/Payment/">
     <Project Path="src/Payment/Payment.Application/Payment.Application.csproj" />
     <Project Path="src/Payment/Payment.Domain/Payment.Domain.csproj" />
     <Project Path="src/Payment/Payment.Infrastructure/Payment.Infrastructure.csproj" />
+    <Project Path="src\Payment\Payment.API\Payment.API.csproj" />
+  </Folder>
+  <Folder Name="/src/Shared/">
+    <Project Path="src\Shared\TicketBooking.Common\TicketBooking.Common.csproj" />
   </Folder>
 </Solution>

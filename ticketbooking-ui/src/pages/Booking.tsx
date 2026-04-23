@@ -50,17 +50,21 @@ export default function Booking() {
         const response = await fetch(`${API_BASE_URL.BOOKING}/api/bookings/${bookingId}/status`);
         if (response.ok) {
           const data = await response.json();
-          if (data.status === 'Pending' || data.status === 'Confirmed') {
+          // Backend returns string names (Pending, Confirmed, Cancelled)
+          const isConfirmed = data.status === 'Confirmed' || data.status === 1;
+          const isCancelled = data.status === 'Cancelled' || data.status === 2;
+
+          if (isConfirmed) {
             clearInterval(interval);
             setLastBookingId(bookingId);
             setBookingStatus('success');
             pollPdfStatus(bookingId);
-          } else if (data.status === 'Cancelled') {
+          } else if (isCancelled) {
             clearInterval(interval);
             setError('Booking was cancelled.');
             setBookingStatus('error');
           }
-          // Continue polling if 'Processing'
+          // Continue polling if 'Pending' or 'Processing'
         }
       } catch (err) {
         console.error('Polling error:', err);
@@ -348,7 +352,7 @@ export default function Booking() {
                 ) : bookingStatus === 'processing' ? (
                   <>
                     <Spinner animation="border" size="sm" className="me-2" />
-                    Finalizing...
+                    Processing Payment...
                   </>
                 ) : (
                   <>

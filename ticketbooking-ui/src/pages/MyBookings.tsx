@@ -49,7 +49,7 @@ export default function MyBookings() {
 
   const now = new Date();
   const upcoming = bookings.filter(b => new Date(b.showTime) >= now && b.status !== 'Cancelled');
-  const past = bookings.filter(b => new Date(b.showTime) < now || b.status === 'Cancelled');
+  const past = bookings.filter(b => (new Date(b.showTime) < now && b.status !== 'Pending') || b.status === 'Cancelled');
 
   const BookingCard = ({ booking }: { booking: Booking }) => (
     <Card className="mb-3 bg-dark border-secondary border-opacity-25 shadow-sm overflow-hidden">

@@ -77,7 +77,7 @@ namespace Booking.Application.Services
         public async Task<IEnumerable<BookingDto>> GetBookingsByUserAsync(string email, CancellationToken cancellationToken = default)
         {
             var bookings = await _repository.GetByEmailAsync(email);
-            
+
             return bookings.Select(b => new BookingDto
             {
                 Id = b.Id,
@@ -115,6 +115,9 @@ namespace Booking.Application.Services
             var booking = await _repository.GetByIdAsync(bookingId);
             if (booking == null) return;
 
+            await _reservationService.ReleaseSeatsAsync(booking.ShowId, booking.SeatNumbers);
+
+            // 2. Update status in DB
             booking.Status = Domain.Enums.BookingStatus.Confirmed;
             await _repository.UpdateAsync(booking);
             await _repository.SaveChangesAsync();
