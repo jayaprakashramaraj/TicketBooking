@@ -11,6 +11,12 @@ using Notification.Domain.Repositories;
 using Notification.API.Consumers;
 using System;
 
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using RabbitMQ.Client;
+using System.Linq;
+using System.Text.Json;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -20,6 +26,28 @@ builder.Services.AddSwaggerGen();
 
 // Redis Configuration
 var redisHost = Environment.GetEnvironmentVariable("REDIS_HOST") ?? builder.Configuration.GetConnectionString("Redis")!;
+
+// RabbitMQ Configuration
+var rabbitMQHost = Environment.GetEnvironmentVariable("RABBITMQ_HOST") ?? builder.Configuration["RabbitMQHost"]!;
+var rabbitMQPortStr = Environment.GetEnvironmentVariable("RABBITMQ_PORT") ?? builder.Configuration["RabbitMQPort"];
+ushort? rabbitMQPort = ushort.TryParse(rabbitMQPortStr, out var portValue) ? portValue : null;
+
+var rabbitMQUser = Environment.GetEnvironmentVariable("RABBITMQ_USER") ?? builder.Configuration["RabbitMQUser"]!;
+var rabbitMQPass = Environment.GetEnvironmentVariable("RABBITMQ_PASS") ?? builder.Configuration["RabbitMQPass"]!;
+
+var rabbitConnectionString = rabbitMQPort.HasValue 
+    ? $"amqp://{rabbitMQUser}:{rabbitMQPass}@{rabbitMQHost}:{rabbitMQPort}"
+    : $"amqp://{rabbitMQUser}:{rabbitMQPass}@{rabbitMQHost}";
+
+// Health Checks
+builder.Services.AddHealthChecks()
+    .AddRedis(redisHost, name: "redis")
+    .AddRabbitMQ(sp =>
+    {
+        var factory = new ConnectionFactory() { Uri = new Uri(rabbitConnectionString) };
+        return factory.CreateConnectionAsync().GetAwaiter().GetResult();
+    }, name: "rabbitmq");
+
 IConnectionMultiplexer? multiplexer = null;
 try 
 {
@@ -96,6 +124,27 @@ app.UseSwagger();
 app.UseSwaggerUI();
 
 app.UseAuthorization();
+
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        var response = new
+        {
+            status = report.Status.ToString(),
+            checks = report.Entries.Select(e => new
+            {
+                component = e.Key,
+                status = e.Value.Status.ToString(),
+                description = e.Value.Description
+            }),
+            totalDuration = report.TotalDuration
+        };
+        await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+    }
+});
+
 app.MapControllers();
 
 app.Run();

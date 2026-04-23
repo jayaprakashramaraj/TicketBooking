@@ -42,18 +42,18 @@ start "EB_IDENTITY" cmd /c "SET ASPNETCORE_URLS=http://localhost:7000 && SET DB_
 
 :: Catalog API (Port 7001)
 SET "MONGO_CONN=mongodb://localhost:27017"
-start "EB_CATALOG" cmd /c "SET ASPNETCORE_URLS=http://localhost:7001 && SET ConnectionStrings__MongoConnection=%MONGO_CONN% && dotnet run --project src\Catalog\Catalog.API\Catalog.API.csproj --no-build --no-launch-profile"
+start "EB_CATALOG" cmd /c "SET ASPNETCORE_URLS=http://localhost:7001 && SET MONGO_CONNECTION=%MONGO_CONN% && SET DISABLE_CORS=true && dotnet run --project src\Catalog\Catalog.API\Catalog.API.csproj --no-build --no-launch-profile"
 
 :: Booking API (Port 7002)
 SET "DB_CONNECTION_BOOKING=Server=%SQL_SERVER%;Database=BookingDb;User Id=sa;Password=%DB_PASS%;TrustServerCertificate=True;Encrypt=False;"
-start "EB_BOOKING" cmd /c "SET ASPNETCORE_URLS=http://localhost:7002 && SET DB_CONNECTION=%DB_CONNECTION_BOOKING% && SET REDIS_HOST=%REDIS_HOST% && SET RABBITMQ_HOST=%RABBITMQ_HOST% && SET RABBITMQ_PORT=%RABBITMQ_PORT% && SET PaymentSimulatorUrl=http://localhost:7005 && SET UIBaseUrl=http://localhost:5173 && dotnet run --project src\Booking\Booking.API\Booking.API.csproj --no-build --no-launch-profile"
+start "EB_BOOKING" cmd /c "SET ASPNETCORE_URLS=http://localhost:7002 && SET DB_CONNECTION=%DB_CONNECTION_BOOKING% && SET REDIS_HOST=%REDIS_HOST% && SET RABBITMQ_HOST=%RABBITMQ_HOST% && SET RABBITMQ_PORT=%RABBITMQ_PORT% && SET PaymentSimulatorUrl=http://localhost:7005 && SET UIBaseUrl=http://localhost:5173 && SET DISABLE_CORS=true && dotnet run --project src\Booking\Booking.API\Booking.API.csproj --no-build --no-launch-profile"
 
 :: Payment API (Port 7003)
 SET "DB_CONNECTION_PAYMENT=Server=%SQL_SERVER%;Database=PaymentDb;User Id=sa;Password=%DB_PASS%;TrustServerCertificate=True;Encrypt=False;"
-start "EB_PAYMENT" cmd /c "SET ASPNETCORE_URLS=http://localhost:7003 && SET DB_CONNECTION=%DB_CONNECTION_PAYMENT% && SET RABBITMQ_HOST=%RABBITMQ_HOST% && SET RABBITMQ_PORT=%RABBITMQ_PORT% && dotnet run --project src\Payment\Payment.API\Payment.API.csproj --no-build --no-launch-profile"
+start "EB_PAYMENT" cmd /c "SET ASPNETCORE_URLS=http://localhost:7003 && SET DB_CONNECTION=%DB_CONNECTION_PAYMENT% && SET RABBITMQ_HOST=%RABBITMQ_HOST% && SET RABBITMQ_PORT=%RABBITMQ_PORT% && SET DISABLE_CORS=true && dotnet run --project src\Payment\Payment.API\Payment.API.csproj --no-build --no-launch-profile"
 
 :: Notification API (Port 7004)
-start "EB_NOTIFICATION" cmd /c "SET ASPNETCORE_URLS=http://localhost:7004 && SET REDIS_HOST=%REDIS_HOST% && SET RABBITMQ_HOST=%RABBITMQ_HOST% && SET RABBITMQ_PORT=%RABBITMQ_PORT% && dotnet run --project src\Notification\Notification.API\Notification.API.csproj --no-build --no-launch-profile"
+start "EB_NOTIFICATION" cmd /c "SET ASPNETCORE_URLS=http://localhost:7004 && SET REDIS_HOST=%REDIS_HOST% && SET RABBITMQ_HOST=%RABBITMQ_HOST% && SET RABBITMQ_PORT=%RABBITMQ_PORT% && SET DISABLE_CORS=true && dotnet run --project src\Notification\Notification.API\Notification.API.csproj --no-build --no-launch-profile"
 
 :: Payment Simulator (Port 7005)
 start "EB_SIMULATOR" cmd /c "SET ASPNETCORE_URLS=http://localhost:7005 && SET RABBITMQ_HOST=%RABBITMQ_HOST% && SET RABBITMQ_PORT=%RABBITMQ_PORT% && dotnet run --project src\PaymentSimulator\PaymentSimulator.API\PaymentSimulator.API.csproj --no-build --no-launch-profile"
