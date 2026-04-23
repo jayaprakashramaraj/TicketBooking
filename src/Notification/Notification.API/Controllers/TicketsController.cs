@@ -17,6 +17,7 @@ namespace Notification.API.Controllers
         }
 
         [HttpGet("{bookingId}")]
+        [HttpHead("{bookingId}")]
         public async Task<IActionResult> GetTicket(Guid bookingId)
         {
             var pdf = await _ticketService.GetTicketAsync(bookingId);
