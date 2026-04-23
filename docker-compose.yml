@@ -2,7 +2,7 @@ services:
   identity.api:
     build:
       context: .
-      dockerfile: Identity.API/Dockerfile
+      dockerfile: src/Identity/Identity.API/Dockerfile
     ports:
       - "5000:8080"
     environment:
@@ -17,7 +17,7 @@ services:
   catalog.api:
     build:
       context: .
-      dockerfile: Catalog.API/Dockerfile
+      dockerfile: src/Catalog/Catalog.API/Dockerfile
     ports:
       - "5001:8080"
     environment:
@@ -30,7 +30,7 @@ services:
   booking.api:
     build:
       context: .
-      dockerfile: Booking.API/Dockerfile
+      dockerfile: src/Booking/Booking.API/Dockerfile
     environment:
       DB_CONNECTION: "Server=sqlserver;Database=BookingDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Connect Timeout=30;Encrypt=False;"
       REDIS_HOST: "redis:6379"
@@ -48,7 +48,7 @@ services:
   payment.api:
     build:
       context: .
-      dockerfile: Payment.API/Dockerfile
+      dockerfile: src/Payment/Payment.API/Dockerfile
     ports:
       - "5003:8080"
     environment:
@@ -65,7 +65,7 @@ services:
   notification.api:
     build:
       context: .
-      dockerfile: Notification.API/Dockerfile
+      dockerfile: src/Notification/Notification.API/Dockerfile
     ports:
       - "5004:8080"
     environment:

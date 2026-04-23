@@ -14,7 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\TicketBooking.Common\TicketBooking.Common.csproj" />
+    <ProjectReference Include="..\..\Shared\TicketBooking.Common\TicketBooking.Common.csproj" />
   </ItemGroup>
 
 </Project>

@@ -2,7 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Booking.Domain\Booking.Domain.csproj" />
-    <ProjectReference Include="..\TicketBooking.Common\TicketBooking.Common.csproj" />
+    <ProjectReference Include="..\..\Shared\TicketBooking.Common\TicketBooking.Common.csproj" />
   </ItemGroup>
 
   <ItemGroup>

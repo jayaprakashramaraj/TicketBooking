@@ -4,11 +4,10 @@ EXPOSE 8080
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
-COPY ["TicketBooking.Common/TicketBooking.Common.csproj", "TicketBooking.Common/"]
-COPY ["Identity.API/Identity.API.csproj", "Identity.API/"]
-RUN dotnet restore "Identity.API/Identity.API.csproj"
+COPY ["src/Identity/Identity.API/Identity.API.csproj", "src/Identity/Identity.API/"]
+RUN dotnet restore "src/Identity/Identity.API/Identity.API.csproj"
 COPY . .
-WORKDIR "/src/Identity.API"
+WORKDIR "/src/src/Identity/Identity.API"
 RUN dotnet build "Identity.API.csproj" -c Release -o /app/build
 
 FROM build AS publish

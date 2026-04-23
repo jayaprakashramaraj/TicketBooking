@@ -4,11 +4,11 @@ EXPOSE 8080
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
-COPY ["TicketBooking.Common/TicketBooking.Common.csproj", "TicketBooking.Common/"]
-COPY ["Payment.API/Payment.API.csproj", "Payment.API/"]
-RUN dotnet restore "Payment.API/Payment.API.csproj"
+COPY ["src/Shared/TicketBooking.Common/TicketBooking.Common.csproj", "src/Shared/TicketBooking.Common/"]
+COPY ["src/Payment/Payment.API/Payment.API.csproj", "src/Payment/Payment.API/"]
+RUN dotnet restore "src/Payment/Payment.API/Payment.API.csproj"
 COPY . .
-WORKDIR "/src/Payment.API"
+WORKDIR "/src/src/Payment/Payment.API"
 RUN dotnet build "Payment.API.csproj" -c Release -o /app/build
 
 FROM build AS publish

@@ -4,11 +4,10 @@ EXPOSE 8080
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
-COPY ["TicketBooking.Common/TicketBooking.Common.csproj", "TicketBooking.Common/"]
-COPY ["Catalog.API/Catalog.API.csproj", "Catalog.API/"]
-RUN dotnet restore "Catalog.API/Catalog.API.csproj"
+COPY ["src/Catalog/Catalog.API/Catalog.API.csproj", "src/Catalog/Catalog.API/"]
+RUN dotnet restore "src/Catalog/Catalog.API/Catalog.API.csproj"
 COPY . .
-WORKDIR "/src/Catalog.API"
+WORKDIR "/src/src/Catalog/Catalog.API"
 RUN dotnet build "Catalog.API.csproj" -c Release -o /app/build
 
 FROM build AS publish
