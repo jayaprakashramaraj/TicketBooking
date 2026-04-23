@@ -12,10 +12,10 @@ const isViteDev = port === '5173';
 
 const API_BASE_URL = (isDev && isViteDev) ? {
   // Local Debugging Ports (Visual Studio / run-local.cmd)
-  IDENTITY: `http://${hostname}:7000`,
-  CATALOG: `http://${hostname}:7001`,
-  BOOKING: `http://${hostname}:7002`,
-  NOTIFICATION: `http://${hostname}:7004`,
+  IDENTITY: import.meta.env.VITE_IDENTITY_API_URL || `http://${hostname}:7000`,
+  CATALOG: import.meta.env.VITE_CATALOG_API_URL || `http://${hostname}:7001`,
+  BOOKING: import.meta.env.VITE_BOOKING_API_URL || `http://${hostname}:7002`,
+  NOTIFICATION: import.meta.env.VITE_NOTIFICATION_API_URL || `http://${hostname}:7004`,
 } : {
   // Docker / Production Ports (via NGINX Proxy)
   // All routed through the NGINX port (5002)

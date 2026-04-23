@@ -19,7 +19,12 @@ export default function MyBookings() {
   const [error, setError] = useState('');
   
   const userStr = localStorage.getItem('user');
-  const user = userStr ? JSON.parse(userStr) : {};
+  let user: any = {};
+  try {
+    user = userStr ? JSON.parse(userStr) : {};
+  } catch (e) {
+    console.error('Failed to parse user from localStorage', e);
+  }
 
   useEffect(() => {
     const fetchBookings = async () => {

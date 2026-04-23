@@ -149,17 +149,11 @@ namespace Booking.Application.Services
             };
 
             await _repository.AddAsync(booking);
-
-            var seats = seatNumbers.Select(s => new Seat
-            {
-                Id = Guid.NewGuid(),
-                ShowId = showId,
-                SeatNumber = s,
-                IsBooked = true,
-                BookingId = bookingId
-            });
-
-            await _repository.AddSeatsAsync(seats);
+            
+            // We use UpsertSeatsAsync instead of a simple Add to handle cases where 
+            // a seat record might already exist (e.g., from a previously cancelled booking).
+            // This prevents unique constraint violations on (ShowId, SeatNumber).
+            await _repository.UpsertSeatsAsync(showId, seatNumbers, bookingId);
             await _repository.SaveChangesAsync();
 
             await _eventBus.PublishAsync(new BookingInitiated

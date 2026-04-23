@@ -21,36 +21,23 @@ namespace Payment.Application.Services
 
         public async Task ProcessPaymentAsync(BookingInitiated bookingInitiated)
         {
-            Console.WriteLine($"Processing real payment for Booking: {bookingInitiated.BookingId}, Amount: {bookingInitiated.TotalAmount}");
+            Console.WriteLine($"Recording PENDING payment for Booking: {bookingInitiated.BookingId}, Amount: {bookingInitiated.TotalAmount}");
 
-            // Simulate real gateway delay
-            await Task.Delay(500);
-
-            var externalId = Guid.NewGuid().ToString();
-
-            // Persist the transaction record
+            // Persist the transaction record as Pending
             var transaction = new Transaction
             {
                 Id = Guid.NewGuid(),
                 BookingId = bookingInitiated.BookingId,
                 Amount = bookingInitiated.TotalAmount,
-                Status = "Success",
-                ExternalTransactionId = externalId,
+                Status = "Pending",
+                ExternalTransactionId = "PENDING",
                 CreatedAt = DateTime.UtcNow
             };
 
             await _transactionRepository.AddAsync(transaction);
             await _transactionRepository.SaveChangesAsync();
 
-            // Publish PaymentCompleted event
-            await _publishEndpoint.Publish(new PaymentCompleted
-            {
-                BookingId = bookingInitiated.BookingId,
-                TransactionId = externalId,
-                PaymentDate = DateTime.UtcNow
-            });
-
-            Console.WriteLine($"Payment transaction {transaction.Id} saved and published.");
+            Console.WriteLine($"Payment transaction {transaction.Id} recorded as PENDING. Waiting for simulator...");
         }
     }
 }

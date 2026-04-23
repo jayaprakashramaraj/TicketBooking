@@ -5,6 +5,7 @@ import Register from './pages/Register';
 import Booking from './pages/Booking';
 import Admin from './pages/Admin';
 import MyBookings from './pages/MyBookings';
+import BookingResult from './pages/BookingResult';
 import { User, LogOut, Ticket, ClipboardList } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Navbar, Nav, Container, Button, Dropdown } from 'react-bootstrap';
@@ -15,7 +16,12 @@ function App() {
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
     if (savedUser) {
-      setUser(JSON.parse(savedUser));
+      try {
+        setUser(JSON.parse(savedUser));
+      } catch (e) {
+        console.error('Failed to parse user from localStorage', e);
+        localStorage.removeItem('user');
+      }
     }
   }, []);
 
@@ -75,6 +81,7 @@ function App() {
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               <Route path="/book/:showId" element={<Booking />} />
+              <Route path="/booking-result" element={<BookingResult />} />
               <Route path="/admin" element={<Admin />} />
               <Route path="/my-bookings" element={<MyBookings />} />
             </Routes>

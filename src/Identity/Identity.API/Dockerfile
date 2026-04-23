@@ -4,6 +4,9 @@ EXPOSE 8080
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
+COPY ["src/Identity/Identity.Domain/Identity.Domain.csproj", "src/Identity/Identity.Domain/"]
+COPY ["src/Identity/Identity.Application/Identity.Application.csproj", "src/Identity/Identity.Application/"]
+COPY ["src/Identity/Identity.Infrastructure/Identity.Infrastructure.csproj", "src/Identity/Identity.Infrastructure/"]
 COPY ["src/Identity/Identity.API/Identity.API.csproj", "src/Identity/Identity.API/"]
 RUN dotnet restore "src/Identity/Identity.API/Identity.API.csproj"
 COPY . .

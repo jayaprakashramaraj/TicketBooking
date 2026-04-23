@@ -18,13 +18,22 @@ namespace Booking.API.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> CreateBooking(CreateBookingRequest request, [FromServices] ILogger<BookingsController> logger)
+        public async Task<IActionResult> CreateBooking(CreateBookingRequest request, [FromServices] ILogger<BookingsController> logger, [FromServices] IConfiguration config)
         {
             try
             {
                 var bookingId = await _bookingService.CreateBookingAsync(request);
+                
+                var simulatorUrl = config["PaymentSimulatorUrl"];
+                var uiUrl = config["UIBaseUrl"];
+                var paymentUrl = $"{simulatorUrl}/index.html?bookingId={bookingId}&amount={request.TotalAmount}&redirectUrl={uiUrl}/booking-result";
 
-                return AcceptedAtAction(nameof(GetBooking), new { id = bookingId }, new { BookingId = bookingId, Status = "Processing" });
+                return StatusCode(202, new 
+                { 
+                    BookingId = bookingId, 
+                    Status = "Processing",
+                    PaymentUrl = paymentUrl 
+                });
             }
             catch (Exception ex) when (ex.Message.Contains("Conflict"))
             {

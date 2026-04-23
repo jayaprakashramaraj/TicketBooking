@@ -27,14 +27,14 @@ builder.Services.AddSwaggerGen();
 
 // Health Checks
 var sqlConnection = Environment.GetEnvironmentVariable("DB_CONNECTION") ?? builder.Configuration.GetConnectionString("DefaultConnection")!;
-var redisHost = Environment.GetEnvironmentVariable("REDIS_HOST") ?? builder.Configuration.GetConnectionString("Redis") ?? "localhost";
+var redisHost = Environment.GetEnvironmentVariable("REDIS_HOST") ?? builder.Configuration.GetConnectionString("Redis")!;
 
-var rabbitMQHost = Environment.GetEnvironmentVariable("RABBITMQ_HOST") ?? builder.Configuration["RabbitMQHost"] ?? "localhost";
+var rabbitMQHost = Environment.GetEnvironmentVariable("RABBITMQ_HOST") ?? builder.Configuration["RabbitMQHost"]!;
 var rabbitMQPortStr = Environment.GetEnvironmentVariable("RABBITMQ_PORT") ?? builder.Configuration["RabbitMQPort"];
 ushort? rabbitMQPort = ushort.TryParse(rabbitMQPortStr, out var portValue) ? portValue : null;
 
-var rabbitMQUser = Environment.GetEnvironmentVariable("RABBITMQ_USER") ?? builder.Configuration["RabbitMQUser"] ?? "guest";
-var rabbitMQPass = Environment.GetEnvironmentVariable("RABBITMQ_PASS") ?? builder.Configuration["RabbitMQPass"] ?? "guest";
+var rabbitMQUser = Environment.GetEnvironmentVariable("RABBITMQ_USER") ?? builder.Configuration["RabbitMQUser"]!;
+var rabbitMQPass = Environment.GetEnvironmentVariable("RABBITMQ_PASS") ?? builder.Configuration["RabbitMQPass"]!;
 
 var rabbitConnectionString = rabbitMQPort.HasValue 
     ? $"amqp://{rabbitMQUser}:{rabbitMQPass}@{rabbitMQHost}:{rabbitMQPort}"
@@ -43,7 +43,7 @@ var rabbitConnectionString = rabbitMQPort.HasValue
 builder.Services.AddHealthChecks()
     .AddSqlServer(sqlConnection, name: "sqlserver")
     .AddRedis(redisHost, name: "redis")
-    .AddRabbitMQ(sp => 
+    .AddRabbitMQ(sp =>
     {
         var factory = new ConnectionFactory() { Uri = new Uri(rabbitConnectionString) };
         return factory.CreateConnectionAsync().GetAwaiter().GetResult();
@@ -53,7 +53,13 @@ builder.Services.AddHealthChecks()
 IConnectionMultiplexer? multiplexer = null;
 try 
 {
-    multiplexer = ConnectionMultiplexer.Connect(redisHost);
+    var options = ConfigurationOptions.Parse(redisHost);
+    options.ConnectTimeout = 10000; // 10 seconds
+    options.SyncTimeout = 10000;    // 10 seconds
+    options.AbortOnConnectFail = false;
+    
+    multiplexer = await ConnectionMultiplexer.ConnectAsync(options);
+    Console.WriteLine($"Connected to Redis at {redisHost}");
 }
 catch (Exception ex)
 {
@@ -113,12 +119,16 @@ builder.Services.AddMassTransit(x =>
             e.ConfigureConsumer<BookingRequestedConsumer>(context);
         });
 
-        cfg.ReceiveEndpoint("payment-completed-queue", e =>
+        // Use unique queue names for each service to ensure that events (like PaymentCompleted)
+        // are broadcast to all interested services instead of being "stolen" by a single consumer
+        // (Competing Consumer pattern). This ensures both Booking and Notification services
+        // receive the same event.
+        cfg.ReceiveEndpoint("booking-service-payment-completed-queue", e =>
         {
             e.ConfigureConsumer<PaymentCompletedConsumer>(context);
         });
 
-        cfg.ReceiveEndpoint("booking-payment-failed-queue", e =>
+        cfg.ReceiveEndpoint("booking-service-payment-failed-queue", e =>
         {
             e.ConfigureConsumer<PaymentFailedConsumer>(context);
         });

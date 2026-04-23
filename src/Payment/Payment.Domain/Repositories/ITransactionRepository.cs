@@ -7,6 +7,8 @@ namespace Payment.Domain.Repositories
     public interface ITransactionRepository
     {
         Task AddAsync(Transaction transaction);
+        Task<Transaction?> GetByBookingIdAsync(Guid bookingId);
+        Task UpdateAsync(Transaction transaction);
         Task SaveChangesAsync();
     }
 }

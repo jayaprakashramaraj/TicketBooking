@@ -19,13 +19,30 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // Redis Configuration
-var redisHost = Environment.GetEnvironmentVariable("REDIS_HOST") ?? builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379";
-builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(redisHost));
+var redisHost = Environment.GetEnvironmentVariable("REDIS_HOST") ?? builder.Configuration.GetConnectionString("Redis")!;
+IConnectionMultiplexer? multiplexer = null;
+try 
+{
+    var options = ConfigurationOptions.Parse(redisHost);
+    options.ConnectTimeout = 10000;
+    options.SyncTimeout = 10000;
+    options.AbortOnConnectFail = false;
+    multiplexer = await ConnectionMultiplexer.ConnectAsync(options);
+    builder.Services.AddSingleton<IConnectionMultiplexer>(multiplexer);
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Warning: Could not connect to Redis at {redisHost}. Error: {ex.Message}");
+    builder.Services.AddSingleton<IConnectionMultiplexer>(sp => null!);
+}
 
 // RabbitMQ Configuration
-var rabbitMQHost = Environment.GetEnvironmentVariable("RABBITMQ_HOST") ?? builder.Configuration["RabbitMQHost"] ?? "localhost";
+var rabbitMQHost = Environment.GetEnvironmentVariable("RABBITMQ_HOST") ?? builder.Configuration["RabbitMQHost"]!;
 var rabbitMQPortStr = Environment.GetEnvironmentVariable("RABBITMQ_PORT") ?? builder.Configuration["RabbitMQPort"];
 ushort? rabbitMQPort = ushort.TryParse(rabbitMQPortStr, out var portValue) ? portValue : null;
+
+var rabbitMQUser = Environment.GetEnvironmentVariable("RABBITMQ_USER") ?? builder.Configuration["RabbitMQUser"]!;
+var rabbitMQPass = Environment.GetEnvironmentVariable("RABBITMQ_PASS") ?? builder.Configuration["RabbitMQPass"]!;
 
 // Dependency Injection
 builder.Services.AddScoped<IEmailService, EmailService>();
@@ -48,11 +65,17 @@ builder.Services.AddMassTransit(x =>
     {
         if (rabbitMQPort.HasValue)
         {
-            cfg.Host(rabbitMQHost, rabbitMQPort.Value, "/", h => { });
+            cfg.Host(rabbitMQHost, rabbitMQPort.Value, "/", h => {
+                h.Username(rabbitMQUser);
+                h.Password(rabbitMQPass);
+            });
         }
         else
         {
-            cfg.Host(rabbitMQHost, "/", h => { });
+            cfg.Host(rabbitMQHost, "/", h => {
+                h.Username(rabbitMQUser);
+                h.Password(rabbitMQPass);
+            });
         }
 
         cfg.ReceiveEndpoint("booking-confirmed-queue", e =>

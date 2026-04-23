@@ -22,9 +22,9 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // MongoDB Configuration
-var mongoConnection = Environment.GetEnvironmentVariable("MONGO_CONNECTION") ?? builder.Configuration.GetConnectionString("MongoConnection") ?? "mongodb://localhost:27017";
-builder.Services.AddSingleton<IMongoClient>(sp =>
-    new MongoClient(mongoConnection));
+// Mongo Configuration
+var mongoConnection = Environment.GetEnvironmentVariable("MONGO_CONNECTION") ?? builder.Configuration.GetConnectionString("MongoConnection");
+builder.Services.AddSingleton<IMongoClient>(new MongoClient(mongoConnection));
 builder.Services.AddScoped(sp =>
     sp.GetRequiredService<IMongoClient>().GetDatabase("CatalogDb"));
 

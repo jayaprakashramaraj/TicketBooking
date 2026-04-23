@@ -5,6 +5,9 @@ EXPOSE 8080
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY ["src/Shared/TicketBooking.Common/TicketBooking.Common.csproj", "src/Shared/TicketBooking.Common/"]
+COPY ["src/Notification/Notification.Domain/Notification.Domain.csproj", "src/Notification/Notification.Domain/"]
+COPY ["src/Notification/Notification.Application/Notification.Application.csproj", "src/Notification/Notification.Application/"]
+COPY ["src/Notification/Notification.Infrastructure/Notification.Infrastructure.csproj", "src/Notification/Notification.Infrastructure/"]
 COPY ["src/Notification/Notification.API/Notification.API.csproj", "src/Notification/Notification.API/"]
 RUN dotnet restore "src/Notification/Notification.API/Notification.API.csproj"
 COPY . .

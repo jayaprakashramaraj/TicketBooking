@@ -137,7 +137,13 @@ export default function Booking() {
         setBookingStatus('processing');
         const data = await response.json();
         setLastBookingId(data.bookingId);
-        pollBookingStatus(data.bookingId);
+        
+        if (data.paymentUrl) {
+          // Redirect to payment simulator
+          window.location.href = data.paymentUrl;
+        } else {
+          pollBookingStatus(data.bookingId);
+        }
       } else if (response.ok) {
         setBookingStatus('success');
       } else if (response.status === 409) {

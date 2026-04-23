@@ -22,12 +22,12 @@ builder.Services.AddSwaggerGen();
 
 // Connection Strings
 var sqlConnection = Environment.GetEnvironmentVariable("DB_CONNECTION") ?? builder.Configuration.GetConnectionString("DefaultConnection")!;
-var rabbitMQHost = Environment.GetEnvironmentVariable("RABBITMQ_HOST") ?? builder.Configuration["RabbitMQHost"] ?? "localhost";
+var rabbitMQHost = Environment.GetEnvironmentVariable("RABBITMQ_HOST") ?? builder.Configuration["RabbitMQHost"]!;
 var rabbitMQPortStr = Environment.GetEnvironmentVariable("RABBITMQ_PORT") ?? builder.Configuration["RabbitMQPort"];
 ushort? rabbitMQPort = ushort.TryParse(rabbitMQPortStr, out var portValue) ? portValue : null;
 
-var rabbitMQUser = Environment.GetEnvironmentVariable("RABBITMQ_USER") ?? builder.Configuration["RabbitMQUser"] ?? "guest";
-var rabbitMQPass = Environment.GetEnvironmentVariable("RABBITMQ_PASS") ?? builder.Configuration["RabbitMQPass"] ?? "guest";
+var rabbitMQUser = Environment.GetEnvironmentVariable("RABBITMQ_USER") ?? builder.Configuration["RabbitMQUser"]!;
+var rabbitMQPass = Environment.GetEnvironmentVariable("RABBITMQ_PASS") ?? builder.Configuration["RabbitMQPass"]!;
 
 builder.Services.AddDbContext<PaymentDbContext>(options =>
     options.UseSqlServer(sqlConnection));
@@ -46,6 +46,8 @@ builder.Services.AddCors(options =>
 builder.Services.AddMassTransit(x =>
 {
     x.AddConsumer<BookingInitiatedConsumer>();
+    x.AddConsumer<PaymentCompletedConsumer>();
+    x.AddConsumer<PaymentFailedConsumer>();
 
     x.UsingRabbitMq((context, cfg) =>
     {
@@ -63,9 +65,23 @@ builder.Services.AddMassTransit(x =>
                 h.Password(rabbitMQPass);
             });
         }
+
         cfg.ReceiveEndpoint("booking-initiated-queue", e =>
         {
             e.ConfigureConsumer<BookingInitiatedConsumer>(context);
+        });
+
+        // Use unique queue names for each service to ensure events are broadcast to all
+        // interested services simultaneously. Using shared names would cause RabbitMQ 
+        // to distribute messages to only one of the services (Competing Consumers).
+        cfg.ReceiveEndpoint("payment-service-payment-completed-queue", e =>
+        {
+            e.ConfigureConsumer<PaymentCompletedConsumer>(context);
+        });
+
+        cfg.ReceiveEndpoint("payment-service-payment-failed-queue", e =>
+        {
+            e.ConfigureConsumer<PaymentFailedConsumer>(context);
         });
     });
 });
