@@ -1,47 +1,22 @@
 using MassTransit;
-using System;
 using System.Threading.Tasks;
 using TicketBooking.Common.Events;
-using Notification.API.Services;
-using StackExchange.Redis;
+using Notification.Application.Interfaces;
 
 namespace Notification.API.Consumers
 {
     public class BookingConfirmedConsumer : IConsumer<BookingConfirmed>
     {
-        private readonly IPdfGenerator _pdfGenerator;
-        private readonly IEmailService _emailService;
-        private readonly IDatabase _redis;
+        private readonly ITicketService _ticketService;
 
-        public BookingConfirmedConsumer(IPdfGenerator pdfGenerator, IEmailService emailService, IConnectionMultiplexer redis)
+        public BookingConfirmedConsumer(ITicketService ticketService)
         {
-            _pdfGenerator = pdfGenerator;
-            _emailService = emailService;
-            _redis = redis.GetDatabase();
+            _ticketService = ticketService;
         }
 
         public async Task Consume(ConsumeContext<BookingConfirmed> context)
         {
-            var message = context.Message;
-            Console.WriteLine($"Generating notification for Booking: {message.BookingId}");
-
-            var pdf = _pdfGenerator.GenerateTicket(
-                message.CustomerEmail,
-                message.ShowName,
-                message.ShowTime,
-                message.SeatNumbers,
-                message.TotalAmount);
-
-            // Save PDF to Redis with 30-day expiration
-            await _redis.StringSetAsync($"ticket:{message.BookingId}", pdf, TimeSpan.FromDays(30));
-            Console.WriteLine($"Saved PDF ticket to Redis for Booking: {message.BookingId}");
-
-            await _emailService.SendEmailWithAttachmentAsync(
-                message.CustomerEmail,
-                "Your Ticket Booking Confirmation",
-                $"Hello,\n\nYour booking for {message.ShowName} is confirmed. Please find your ticket attached.",
-                pdf,
-                $"Ticket_{message.BookingId}.pdf");
+            await _ticketService.ProcessBookingConfirmedAsync(context.Message);
         }
     }
 }

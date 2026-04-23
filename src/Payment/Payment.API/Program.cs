@@ -3,9 +3,15 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.EntityFrameworkCore;
-using Payment.API.Consumers;
-using Payment.API.Data;
 using Microsoft.Extensions.Configuration;
+using Payment.Infrastructure.Data;
+using Payment.Domain.Repositories;
+using Payment.Infrastructure.Repositories;
+using Payment.Application.Interfaces;
+using Payment.Application.Services;
+using Payment.API.Consumers;
+using System;
+using System.Threading;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -26,7 +32,11 @@ var rabbitMQPass = Environment.GetEnvironmentVariable("RABBITMQ_PASS") ?? builde
 builder.Services.AddDbContext<PaymentDbContext>(options =>
     options.UseSqlServer(sqlConnection));
 
-// CORS for React App
+// Dependency Injection
+builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+
+// CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll",
@@ -67,7 +77,7 @@ if (Environment.GetEnvironmentVariable("DISABLE_CORS") != "true")
     app.UseCors("AllowAll");
 }
 
-// Retry logic for database initialization
+// Database Initialization with Retry
 for (int i = 0; i < 15; i++)
 {
     try
@@ -82,17 +92,15 @@ for (int i = 0; i < 15; i++)
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Database connection failed: {ex.Message}. Retrying in 5s... ({i + 1}/15)");
+        Console.WriteLine($"Database connection failed: {ex.Message}. Retrying in 5s... ({i + 1}/15)");        
         Thread.Sleep(5000);
         if (i == 14) throw;
     }
 }
 
-// Configure the HTTP request pipeline.
 app.UseSwagger();
 app.UseSwaggerUI();
 
-//app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
 

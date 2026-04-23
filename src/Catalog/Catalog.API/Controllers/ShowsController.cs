@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using Catalog.API.Domain;
-using MongoDB.Driver;
+using Catalog.Application.DTOs;
+using Catalog.Application.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -11,56 +11,48 @@ namespace Catalog.API.Controllers
     [Route("api/[controller]")]
     public class ShowsController : ControllerBase
     {
-        private readonly IMongoCollection<Show> _showsCollection;
+        private readonly IShowService _showService;
 
-        public ShowsController(IMongoDatabase database)
+        public ShowsController(IShowService showService)
         {
-            _showsCollection = database.GetCollection<Show>("Shows");
+            _showService = showService;
         }
 
         [HttpGet("search")]
-        public async Task<ActionResult<IEnumerable<Show>>> Search(DateTime? time)
+        public async Task<ActionResult<IEnumerable<ShowDto>>> Search(DateTime? time)
         {
-            var filter = time.HasValue 
-                ? Builders<Show>.Filter.And(
-                    Builders<Show>.Filter.Gte(s => s.StartTime, time.Value),
-                    Builders<Show>.Filter.Lte(s => s.StartTime, time.Value.AddHours(4))
-                  )
-                : Builders<Show>.Filter.Empty;
-
-            var results = await _showsCollection.Find(filter).ToListAsync();
+            var results = await _showService.SearchShowsAsync(time);
             return Ok(results);
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<Show>> GetById(Guid id)
+        public async Task<ActionResult<ShowDto>> GetById(Guid id)
         {
-            var show = await _showsCollection.Find(s => s.Id == id).FirstOrDefaultAsync();
+            var show = await _showService.GetShowByIdAsync(id);
             if (show == null) return NotFound();
             return Ok(show);
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create(Show show)
+        public async Task<IActionResult> Create(ShowDto showDto)
         {
-            if (show.Id == Guid.Empty) show.Id = Guid.NewGuid();
-            await _showsCollection.InsertOneAsync(show);
-            return CreatedAtAction(nameof(GetById), new { id = show.Id }, show);
+            var createdShow = await _showService.CreateShowAsync(showDto);
+            return CreatedAtAction(nameof(GetById), new { id = createdShow.Id }, createdShow);
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(Guid id, Show show)
+        public async Task<IActionResult> Update(Guid id, ShowDto showDto)
         {
-            var result = await _showsCollection.ReplaceOneAsync(s => s.Id == id, show);
-            if (result.MatchedCount == 0) return NotFound();
+            var updated = await _showService.UpdateShowAsync(id, showDto);
+            if (!updated) return NotFound();
             return NoContent();
         }
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(Guid id)
         {
-            var result = await _showsCollection.DeleteOneAsync(s => s.Id == id);
-            if (result.DeletedCount == 0) return NotFound();
+            var deleted = await _showService.DeleteShowAsync(id);
+            if (!deleted) return NotFound();
             return NoContent();
         }
     }

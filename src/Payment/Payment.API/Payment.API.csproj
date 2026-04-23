@@ -9,12 +9,13 @@
   <ItemGroup>
     <PackageReference Include="MassTransit.RabbitMQ" Version="8.3.6" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.5" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.6" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.7" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.7" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\Shared\TicketBooking.Common\TicketBooking.Common.csproj" />
+    <ProjectReference Include="..\Payment.Infrastructure\Payment.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

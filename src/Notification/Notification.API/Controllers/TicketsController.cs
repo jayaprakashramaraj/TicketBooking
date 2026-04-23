@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
-using StackExchange.Redis;
 using System;
 using System.Threading.Tasks;
+using Notification.Application.Interfaces;
 
 namespace Notification.API.Controllers
 {
@@ -9,33 +9,20 @@ namespace Notification.API.Controllers
     [Route("api/[controller]")]
     public class TicketsController : ControllerBase
     {
-        private readonly IDatabase _redis;
+        private readonly ITicketService _ticketService;
 
-        public TicketsController(IConnectionMultiplexer redis)
+        public TicketsController(ITicketService ticketService)
         {
-            _redis = redis.GetDatabase();
+            _ticketService = ticketService;
         }
 
-        [HttpGet("{id}")]
-        [HttpHead("{id}")]
-        public async Task<IActionResult> DownloadTicket(Guid id)
+        [HttpGet("{bookingId}")]
+        public async Task<IActionResult> GetTicket(Guid bookingId)
         {
-            Console.WriteLine($"Checking ticket in Redis for ID: {id}");
-            var pdfData = await _redis.StringGetAsync($"ticket:{id}");
+            var pdf = await _ticketService.GetTicketAsync(bookingId);
+            if (pdf == null) return NotFound("Ticket not found or still generating.");
 
-            if (pdfData.IsNull)
-            {
-                Console.WriteLine($"Ticket NOT FOUND in Redis for ID: {id}");
-                return NotFound("Ticket not found or expired.");
-            }
-
-            Console.WriteLine($"Ticket FOUND in Redis for ID: {id}");
-            if (Request.Method == "HEAD")
-            {
-                return Ok();
-            }
-
-            return File((byte[])pdfData!, "application/pdf", $"Ticket_{id}.pdf");
+            return File(pdf, "application/pdf", $"Ticket_{bookingId}.pdf");
         }
     }
 }

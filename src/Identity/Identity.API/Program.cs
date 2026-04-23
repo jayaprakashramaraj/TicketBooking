@@ -2,11 +2,17 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.EntityFrameworkCore;
-using Identity.API.Data;
 using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Identity.Infrastructure.Data;
+using Identity.Domain.Repositories;
+using Identity.Infrastructure.Repositories;
+using Identity.Application.Interfaces;
+using Identity.Application.Services;
+using System;
+using System.Threading;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,6 +25,10 @@ var sqlConnection = Environment.GetEnvironmentVariable("DB_CONNECTION") ?? build
 
 builder.Services.AddDbContext<IdentityDbContext>(options =>
     options.UseSqlServer(sqlConnection));
+
+// Dependency Injection
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IAuthService, AuthService>();
 
 // JWT Configuration
 var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? builder.Configuration["JwtSecret"] ?? "YourSuperSecretKeyThatIsAtLeast32CharsLong!";
@@ -41,7 +51,7 @@ builder.Services.AddAuthentication(x =>
     };
 });
 
-// CORS for React App
+// CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll",
@@ -55,7 +65,7 @@ if (Environment.GetEnvironmentVariable("DISABLE_CORS") != "true")
     app.UseCors("AllowAll");
 }
 
-// Retry logic for database initialization
+// Database Initialization with Retry
 for (int i = 0; i < 10; i++)
 {
     try
@@ -78,8 +88,6 @@ for (int i = 0; i < 10; i++)
 
 app.UseSwagger();
 app.UseSwaggerUI();
-
-// app.UseHttpsRedirection();
 
 app.UseAuthentication();
 app.UseAuthorization();

@@ -2,18 +2,19 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using MongoDB.Driver;
-using Catalog.API.Domain;
 using Microsoft.Extensions.Configuration;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Bson;
+using Catalog.Domain.Repositories;
+using Catalog.Infrastructure.Repositories;
+using Catalog.Application.Interfaces;
+using Catalog.Application.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Fix MongoDB Guid Serialization for Driver 3.x
+// Fix MongoDB Guid Serialization
 BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
 
 builder.Services.AddControllers();
@@ -22,10 +23,14 @@ builder.Services.AddSwaggerGen();
 
 // MongoDB Configuration
 var mongoConnection = Environment.GetEnvironmentVariable("MONGO_CONNECTION") ?? builder.Configuration.GetConnectionString("MongoConnection") ?? "mongodb://localhost:27017";
-builder.Services.AddSingleton<IMongoClient>(sp => 
+builder.Services.AddSingleton<IMongoClient>(sp =>
     new MongoClient(mongoConnection));
-builder.Services.AddScoped(sp => 
+builder.Services.AddScoped(sp =>
     sp.GetRequiredService<IMongoClient>().GetDatabase("CatalogDb"));
+
+// Dependency Injection
+builder.Services.AddScoped<IShowRepository, ShowRepository>();
+builder.Services.AddScoped<IShowService, ShowService>();
 
 // CORS
 builder.Services.AddCors(options =>
@@ -44,25 +49,13 @@ if (Environment.GetEnvironmentVariable("DISABLE_CORS") != "true")
 // Seed MongoDB
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<IMongoDatabase>();
-    var collection = db.GetCollection<Show>("Shows");
-    if (!collection.AsQueryable().Any())
-    {
-        var shows = new List<Show>
-        {
-            new Show { Id = Guid.NewGuid(), MovieName = "Inception", TheaterName = "Grand Cinema", StartTime = DateTime.Today.AddHours(18), Price = 15.0m },
-            new Show { Id = Guid.NewGuid(), MovieName = "The Dark Knight", TheaterName = "Grand Cinema", StartTime = DateTime.Today.AddHours(21), Price = 18.0m },
-            new Show { Id = Guid.NewGuid(), MovieName = "Interstellar", TheaterName = "Star Plex", StartTime = DateTime.Today.AddHours(19), Price = 16.0m },
-            new Show { Id = Guid.NewGuid(), MovieName = "Tenet", TheaterName = "IMAX Center", StartTime = DateTime.Today.AddHours(20), Price = 20.0m }
-        };
-        collection.InsertMany(shows);
-    }
+    var showService = scope.ServiceProvider.GetRequiredService<IShowService>();
+    await showService.SeedDataAsync();
 }
 
 app.UseSwagger();
 app.UseSwaggerUI();
 
-//app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
 
