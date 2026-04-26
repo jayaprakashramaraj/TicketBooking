@@ -24,9 +24,24 @@ namespace Booking.API.Controllers
             {
                 var bookingId = await _bookingService.CreateBookingAsync(request);
                 
-                var simulatorUrl = config["PaymentSimulatorUrl"];
-                var uiUrl = config["UIBaseUrl"];
-                var paymentUrl = $"{simulatorUrl}/index.html?bookingId={bookingId}&amount={request.TotalAmount}&redirectUrl={uiUrl}/booking-result";
+                // Get URLs from configuration
+                var simulatorUrl = (config["PaymentSimulatorUrl"] ?? "").TrimEnd('/');
+                var defaultUiUrl = (config["UIBaseUrl"] ?? "").TrimEnd('/');
+                
+                if (string.IsNullOrEmpty(simulatorUrl))
+                {
+                    logger.LogError("PaymentSimulatorUrl is not configured!");
+                    return StatusCode(500, "Payment simulator configuration is missing.");
+                }
+
+                // Use the redirect URL provided by the frontend, or fall back to the configured base UI URL
+                var redirectUrl = !string.IsNullOrEmpty(request.RedirectUrl) 
+                    ? request.RedirectUrl.TrimEnd('/') 
+                    : $"{defaultUiUrl}/booking-result";
+
+                // Construct the final payment URL. 
+                // The simulatorUrl should be configured to include its full base path (e.g. http://localhost:5002/payment-simulator)
+                var paymentUrl = $"{simulatorUrl}/index.html?bookingId={bookingId}&amount={request.TotalAmount}&redirectUrl={redirectUrl}";
 
                 return StatusCode(202, new 
                 { 

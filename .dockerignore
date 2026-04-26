@@ -1,0 +1,12 @@
+**/.git
+**/.vs
+**/bin
+**/obj
+**/node_modules
+**/dist
+**/.env
+docker-compose.override.yml
+docker-compose.infra.yml
+.dockerignore
+README.md
+GEMINI.md

@@ -129,7 +129,8 @@ export default function Booking() {
           showTime: show?.startTime,
           customerEmail: user.email,
           seatNumbers: selectedSeats,
-          totalAmount: (show?.price || 0) * selectedSeats.length
+          totalAmount: (show?.price || 0) * selectedSeats.length,
+          redirectUrl: `${window.location.origin}/booking-result`
         })
       });
 

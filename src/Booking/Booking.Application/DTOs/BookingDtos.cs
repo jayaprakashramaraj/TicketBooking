@@ -11,6 +11,7 @@ namespace Booking.Application.DTOs
         public required string CustomerEmail { get; init; }
         public required List<string> SeatNumbers { get; init; }
         public decimal TotalAmount { get; init; }
+        public string? RedirectUrl { get; init; }
     }
 
     public record BookingDto

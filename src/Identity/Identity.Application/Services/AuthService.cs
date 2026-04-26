@@ -26,13 +26,14 @@ namespace Identity.Application.Services
 
         public async Task<AuthResponse?> RegisterAsync(RegisterRequest request)
         {
-            if (await _userRepository.ExistsAsync(request.Email))
+            var email = request.Email.Trim().ToLower();
+            if (await _userRepository.ExistsAsync(email))
                 return null;
 
             var user = new User
             {
                 Id = Guid.NewGuid(),
-                Email = request.Email,
+                Email = email,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
                 FullName = request.FullName,
                 Role = "User"
@@ -55,7 +56,8 @@ namespace Identity.Application.Services
 
         public async Task<AuthResponse?> LoginAsync(LoginRequest request)
         {
-            var user = await _userRepository.GetByEmailAsync(request.Email);
+            var email = request.Email.Trim().ToLower();
+            var user = await _userRepository.GetByEmailAsync(email);
 
             if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
                 return null;
