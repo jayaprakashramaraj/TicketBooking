@@ -12,6 +12,10 @@ using Payment.Application.Services;
 using Payment.API.Consumers;
 using System;
 using System.Threading;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using System.Text.Json;
+using RabbitMQ.Client;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,8 +33,20 @@ ushort? rabbitMQPort = ushort.TryParse(rabbitMQPortStr, out var portValue) ? por
 var rabbitMQUser = Environment.GetEnvironmentVariable("RABBITMQ_USER") ?? builder.Configuration["RabbitMQUser"]!;
 var rabbitMQPass = Environment.GetEnvironmentVariable("RABBITMQ_PASS") ?? builder.Configuration["RabbitMQPass"]!;
 
+var rabbitConnectionString = rabbitMQPort.HasValue
+    ? $"amqp://{rabbitMQUser}:{rabbitMQPass}@{rabbitMQHost}:{rabbitMQPort}"
+    : $"amqp://{rabbitMQUser}:{rabbitMQPass}@{rabbitMQHost}";
+
 builder.Services.AddDbContext<PaymentDbContext>(options =>
     options.UseSqlServer(sqlConnection));
+
+builder.Services.AddHealthChecks()
+    .AddSqlServer(sqlConnection, name: "sqlserver")
+    .AddRabbitMQ(sp =>
+    {
+        var factory = new ConnectionFactory() { Uri = new Uri(rabbitConnectionString) };
+        return factory.CreateConnectionAsync().GetAwaiter().GetResult();
+    }, name: "rabbitmq");
 
 // Dependency Injection
 builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
@@ -118,6 +134,27 @@ app.UseSwagger();
 app.UseSwaggerUI();
 
 app.UseAuthorization();
+
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        var response = new
+        {
+            status = report.Status.ToString(),
+            checks = report.Entries.Select(e => new
+            {
+                component = e.Key,
+                status = e.Value.Status.ToString(),
+                description = e.Value.Description
+            }),
+            totalDuration = report.TotalDuration
+        };
+        await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+    }
+});
+
 app.MapControllers();
 
 app.Run();

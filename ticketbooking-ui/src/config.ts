@@ -7,7 +7,7 @@ const port = window.location.port;
 const isDev = import.meta.env.DEV;
 
 // If we are running on port 5173, we are in local Vite dev mode.
-// If we are running on any other port (like 3000), we are likely in Docker.
+// Docker mode is served through the NGINX gateway.
 const isViteDev = port === '5173';
 
 const API_BASE_URL = (isDev && isViteDev) ? {

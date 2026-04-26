@@ -13,6 +13,9 @@ using Identity.Application.Interfaces;
 using Identity.Application.Services;
 using System;
 using System.Threading;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,6 +28,9 @@ var sqlConnection = Environment.GetEnvironmentVariable("DB_CONNECTION") ?? build
 
 builder.Services.AddDbContext<IdentityDbContext>(options =>
     options.UseSqlServer(sqlConnection));
+
+builder.Services.AddHealthChecks()
+    .AddSqlServer(sqlConnection, name: "sqlserver");
 
 // Dependency Injection
 builder.Services.AddScoped<IUserRepository, UserRepository>();
@@ -91,6 +97,26 @@ app.UseSwaggerUI();
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        var response = new
+        {
+            status = report.Status.ToString(),
+            checks = report.Entries.Select(e => new
+            {
+                component = e.Key,
+                status = e.Value.Status.ToString(),
+                description = e.Value.Description
+            }),
+            totalDuration = report.TotalDuration
+        };
+        await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+    }
+});
 
 app.MapControllers();
 

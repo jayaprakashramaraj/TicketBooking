@@ -30,28 +30,48 @@ The system supports show discovery, user registration/login, seat reservation, a
 
 ```mermaid
 flowchart LR
-    UI[React + Vite UI] --> NGINX[Nginx API Gateway]
+    Browser[Browser] -->|http://localhost:5002| Gateway[Nginx API Gateway]
 
-    NGINX --> Identity[Identity API]
-    NGINX --> Catalog[Catalog API]
-    NGINX --> Booking[Booking API]
-    NGINX --> Notification[Notification API]
-    NGINX --> Simulator[Payment Simulator]
+    subgraph DockerNetwork[Docker network]
+        Gateway -->|/| UI[React frontend]
+        Gateway -->|/api/auth| Identity[Identity API]
+        Gateway -->|/api/shows| Catalog[Catalog API]
+        Gateway -->|/api/bookings| Booking[Booking API]
+        Gateway -->|/api/tickets| Notification[Notification API]
+        Gateway -->|/payment-simulator and /api/payment| Simulator[Payment Simulator]
 
-    Identity --> IdentityDb[(SQL Server: IdentityDb)]
-    Catalog --> CatalogDb[(MongoDB: CatalogDb)]
-    Booking --> BookingDb[(SQL Server: BookingDb)]
-    Booking --> Redis[(Redis)]
-    Payment[Payment API] --> PaymentDb[(SQL Server: PaymentDb)]
-    Notification --> Redis
+        Identity --> IdentityDb[(SQL Server: IdentityDb)]
+        Catalog --> CatalogDb[(MongoDB: CatalogDb)]
+        Booking --> BookingDb[(SQL Server: BookingDb)]
+        Booking --> Redis[(Redis seat locks)]
+        Payment[Payment API] --> PaymentDb[(SQL Server: PaymentDb)]
+        Notification --> TicketCache[(Redis ticket PDFs)]
 
-    Booking <--> RabbitMQ[(RabbitMQ)]
-    Payment <--> RabbitMQ
-    Notification <--> RabbitMQ
-    Simulator --> RabbitMQ
+        Booking <--> RabbitMQ[(RabbitMQ event bus)]
+        Payment <--> RabbitMQ
+        Notification <--> RabbitMQ
+        Simulator --> RabbitMQ
+    end
 ```
 
-The application uses synchronous HTTP for user-facing queries and commands, while long-running booking/payment/ticket operations are coordinated through RabbitMQ events using MassTransit.
+In Docker mode, only Nginx is exposed to the host. The frontend, APIs, payment simulator, databases, Redis, and RabbitMQ stay inside the Docker network. The application uses synchronous HTTP for user-facing queries and commands, while long-running booking/payment/ticket operations are coordinated through RabbitMQ events using MassTransit.
+
+### Service Layering
+
+Each microservice follows the same high-level shape so business behavior stays out of controllers and infrastructure details stay behind interfaces.
+
+```mermaid
+flowchart TB
+    API[API layer\nControllers and message consumers]
+    Application[Application layer\nUse cases, DTOs, service interfaces]
+    Domain[Domain layer\nEntities, enums, repository contracts]
+    Infrastructure[Infrastructure layer\nEF Core, MongoDB, Redis, RabbitMQ, PDF/email]
+
+    API --> Application
+    Application --> Domain
+    Infrastructure --> Domain
+    API --> Infrastructure
+```
 
 ## Core Capabilities
 
@@ -119,6 +139,34 @@ sequenceDiagram
         Booking->>Redis: Release temporary seat locks
         Booking->>Booking: Mark seats available
     end
+```
+
+### Event Choreography
+
+```mermaid
+flowchart TD
+    A[POST /api/bookings] --> B[Reserve seats in Redis with TTL]
+    B -->|reserved| C[Publish BookingRequested]
+    B -->|seat conflict| X[Return 409 Conflict]
+
+    C --> D[BookingRequestedConsumer]
+    D --> E[Persist Pending booking and booked seats]
+    E --> F[Publish BookingInitiated]
+
+    F --> G[Payment API records Pending transaction]
+    G --> H[User completes payment in simulator]
+    H -->|success| I[Publish PaymentCompleted]
+    H -->|failure or cancel| J[Publish PaymentFailed]
+
+    I --> K[Booking API confirms booking]
+    K --> L[Release Redis seat locks]
+    L --> M[Publish BookingConfirmed]
+    M --> N[Notification API generates PDF ticket]
+    N --> O[Store ticket PDF in Redis and simulate email]
+
+    J --> P[Booking API cancels booking]
+    P --> Q[Release Redis seat locks]
+    Q --> R[Mark seats available in SQL Server]
 ```
 
 ## Architecture and Design Patterns
@@ -264,18 +312,27 @@ Several services expose `/health` endpoints with JSON health output for dependen
 
 | Service | External URL |
 | --- | --- |
-| Frontend container | `http://localhost:3000` |
-| Nginx gateway | `http://localhost:5002` |
-| Payment simulator through Nginx | `http://localhost:5006` |
-| Identity API | `http://localhost:5000` |
-| Catalog API | `http://localhost:5001` |
-| Payment API | `http://localhost:5003` |
-| Notification API | `http://localhost:5004` |
-| Booking API | `http://localhost:5005` |
-| RabbitMQ management | `http://localhost:15673` |
-| SQL Server | `localhost,1434` |
-| Redis | `localhost:6380` |
-| MongoDB | `localhost:27017` |
+| Nginx gateway, frontend, and APIs | `http://localhost:5002` |
+
+In full Docker mode, Nginx is the only service published to the host. APIs, frontend, payment simulator, databases, Redis, and RabbitMQ stay on the internal Docker network.
+
+Useful gateway routes:
+
+| Route | Target |
+| --- | --- |
+| `/` | React frontend |
+| `/api/auth` | Identity API |
+| `/api/shows` | Catalog API |
+| `/api/bookings` | Booking API |
+| `/api/tickets` | Notification API |
+| `/api/payment` | Payment simulator API |
+| `/payment-simulator/` | Payment simulator UI |
+| `/health/identity` | Identity health |
+| `/health/catalog` | Catalog health |
+| `/health/booking` | Booking health |
+| `/health/payment` | Payment health |
+| `/health/notification` | Notification health |
+| `/health/payment-simulator` | Payment simulator health |
 
 ### Local development mode
 
@@ -355,10 +412,10 @@ docker-compose up -d --build
 Open:
 
 ```text
-http://localhost:3000
+http://localhost:5002
 ```
 
-In Docker mode, the frontend is served by its own container and API traffic is routed through Nginx on port `5002`.
+In Docker mode, the frontend, APIs, and payment simulator are all routed through Nginx on port `5002`. No individual microservice or infrastructure port is published to the host by `docker-compose.yml`.
 
 To stop the stack:
 

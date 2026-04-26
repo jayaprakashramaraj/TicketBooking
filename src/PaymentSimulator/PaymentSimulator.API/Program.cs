@@ -3,6 +3,10 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using TicketBooking.Common.Events;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using System.Text.Json;
+using RabbitMQ.Client;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,6 +19,7 @@ var rabbitMQPortStr = Environment.GetEnvironmentVariable("RABBITMQ_PORT") ?? bui
 ushort.TryParse(rabbitMQPortStr, out var rabbitMQPort);
 var rabbitMQUser = Environment.GetEnvironmentVariable("RABBITMQ_USER") ?? builder.Configuration["RabbitMQUser"]!;
 var rabbitMQPass = Environment.GetEnvironmentVariable("RABBITMQ_PASS") ?? builder.Configuration["RabbitMQPass"]!;
+var rabbitConnectionString = $"amqp://{rabbitMQUser}:{rabbitMQPass}@{rabbitMQHost}:{rabbitMQPort}";
 
 builder.Services.AddMassTransit(x =>
 {
@@ -29,6 +34,13 @@ builder.Services.AddMassTransit(x =>
 // Ensure the application waits for RabbitMQ to be fully connected before starting.
 // This prevents silent message loss if the simulator attempts to publish before the broker is ready.
 builder.Services.AddOptions<MassTransitHostOptions>().Configure(options => options.WaitUntilStarted = true);
+
+builder.Services.AddHealthChecks()
+    .AddRabbitMQ(sp =>
+    {
+        var factory = new ConnectionFactory() { Uri = new Uri(rabbitConnectionString) };
+        return factory.CreateConnectionAsync().GetAwaiter().GetResult();
+    }, name: "rabbitmq");
 
 builder.Services.AddCors(options =>
 {
@@ -57,6 +69,26 @@ app.MapGet("/", (HttpContext context) =>
 app.MapFallbackToFile("index.html");
 
 app.MapGet("/ping", () => Results.Ok(new { status = "alive", time = DateTime.UtcNow }));
+
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        var response = new
+        {
+            status = report.Status.ToString(),
+            checks = report.Entries.Select(e => new
+            {
+                component = e.Key,
+                status = e.Value.Status.ToString(),
+                description = e.Value.Description
+            }),
+            totalDuration = report.TotalDuration
+        };
+        await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+    }
+});
 
 // Endpoint to process payment result
 app.MapPost("/api/payment/complete", async (PaymentResultRequest request, IBus bus) => 

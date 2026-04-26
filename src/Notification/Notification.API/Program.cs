@@ -35,7 +35,7 @@ ushort? rabbitMQPort = ushort.TryParse(rabbitMQPortStr, out var portValue) ? por
 var rabbitMQUser = Environment.GetEnvironmentVariable("RABBITMQ_USER") ?? builder.Configuration["RabbitMQUser"]!;
 var rabbitMQPass = Environment.GetEnvironmentVariable("RABBITMQ_PASS") ?? builder.Configuration["RabbitMQPass"]!;
 
-var rabbitConnectionString = rabbitMQPort.HasValue 
+var rabbitConnectionString = rabbitMQPort.HasValue
     ? $"amqp://{rabbitMQUser}:{rabbitMQPass}@{rabbitMQHost}:{rabbitMQPort}"
     : $"amqp://{rabbitMQUser}:{rabbitMQPass}@{rabbitMQHost}";
 
@@ -63,14 +63,6 @@ catch (Exception ex)
     Console.WriteLine($"Warning: Could not connect to Redis at {redisHost}. Error: {ex.Message}");
     builder.Services.AddSingleton<IConnectionMultiplexer>(sp => null!);
 }
-
-// RabbitMQ Configuration
-var rabbitMQHost = Environment.GetEnvironmentVariable("RABBITMQ_HOST") ?? builder.Configuration["RabbitMQHost"]!;
-var rabbitMQPortStr = Environment.GetEnvironmentVariable("RABBITMQ_PORT") ?? builder.Configuration["RabbitMQPort"];
-ushort? rabbitMQPort = ushort.TryParse(rabbitMQPortStr, out var portValue) ? portValue : null;
-
-var rabbitMQUser = Environment.GetEnvironmentVariable("RABBITMQ_USER") ?? builder.Configuration["RabbitMQUser"]!;
-var rabbitMQPass = Environment.GetEnvironmentVariable("RABBITMQ_PASS") ?? builder.Configuration["RabbitMQPass"]!;
 
 // Dependency Injection
 builder.Services.AddScoped<IEmailService, EmailService>();

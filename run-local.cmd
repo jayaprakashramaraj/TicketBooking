@@ -38,36 +38,38 @@ echo [3/5] Launching APIs (7000-7005)...
 
 :: Identity API (Port 7000)
 SET "DB_CONNECTION_IDENTITY=Server=%SQL_SERVER%;Database=IdentityDb;User Id=sa;Password=%DB_PASS%;TrustServerCertificate=True;Encrypt=False;"
-start "EB_IDENTITY" cmd /c "SET ASPNETCORE_URLS=http://localhost:7000 && SET DB_CONNECTION=%DB_CONNECTION_IDENTITY% && SET JWT_SECRET=%JWT_SECRET% && dotnet run --project src\Identity\Identity.API\Identity.API.csproj --no-build --no-launch-profile"
+start "EB_IDENTITY" cmd /c "SET ASPNETCORE_URLS=http://localhost:7000&& SET DB_CONNECTION=%DB_CONNECTION_IDENTITY%&& SET JWT_SECRET=%JWT_SECRET%&& dotnet run --project src\Identity\Identity.API\Identity.API.csproj --no-build --no-launch-profile"
 
 :: Catalog API (Port 7001)
 SET "MONGO_CONN=mongodb://localhost:27017"
-start "EB_CATALOG" cmd /c "SET ASPNETCORE_URLS=http://localhost:7001 && SET MONGO_CONNECTION=%MONGO_CONN% && SET DISABLE_CORS=true && dotnet run --project src\Catalog\Catalog.API\Catalog.API.csproj --no-build --no-launch-profile"
+start "EB_CATALOG" cmd /c "SET ASPNETCORE_URLS=http://localhost:7001&& SET MONGO_CONNECTION=%MONGO_CONN%&& dotnet run --project src\Catalog\Catalog.API\Catalog.API.csproj --no-build --no-launch-profile"
 
 :: Booking API (Port 7002)
 SET "DB_CONNECTION_BOOKING=Server=%SQL_SERVER%;Database=BookingDb;User Id=sa;Password=%DB_PASS%;TrustServerCertificate=True;Encrypt=False;"
-start "EB_BOOKING" cmd /c "SET ASPNETCORE_URLS=http://localhost:7002 && SET DB_CONNECTION=%DB_CONNECTION_BOOKING% && SET REDIS_HOST=%REDIS_HOST% && SET RABBITMQ_HOST=%RABBITMQ_HOST% && SET RABBITMQ_PORT=%RABBITMQ_PORT% && SET PaymentSimulatorUrl=http://localhost:7005 && SET UIBaseUrl=http://localhost:5173 && SET DISABLE_CORS=true && dotnet run --project src\Booking\Booking.API\Booking.API.csproj --no-build --no-launch-profile"
+start "EB_BOOKING" cmd /c "SET ASPNETCORE_URLS=http://localhost:7002&& SET DB_CONNECTION=%DB_CONNECTION_BOOKING%&& SET REDIS_HOST=%REDIS_HOST%&& SET RABBITMQ_HOST=%RABBITMQ_HOST%&& SET RABBITMQ_PORT=%RABBITMQ_PORT%&& SET PaymentSimulatorUrl=http://localhost:7005&& SET UIBaseUrl=http://localhost:5173&& dotnet run --project src\Booking\Booking.API\Booking.API.csproj --no-build --no-launch-profile"
 
 :: Payment API (Port 7003)
 SET "DB_CONNECTION_PAYMENT=Server=%SQL_SERVER%;Database=PaymentDb;User Id=sa;Password=%DB_PASS%;TrustServerCertificate=True;Encrypt=False;"
-start "EB_PAYMENT" cmd /c "SET ASPNETCORE_URLS=http://localhost:7003 && SET DB_CONNECTION=%DB_CONNECTION_PAYMENT% && SET RABBITMQ_HOST=%RABBITMQ_HOST% && SET RABBITMQ_PORT=%RABBITMQ_PORT% && SET DISABLE_CORS=true && dotnet run --project src\Payment\Payment.API\Payment.API.csproj --no-build --no-launch-profile"
+start "EB_PAYMENT" cmd /c "SET ASPNETCORE_URLS=http://localhost:7003&& SET DB_CONNECTION=%DB_CONNECTION_PAYMENT%&& SET RABBITMQ_HOST=%RABBITMQ_HOST%&& SET RABBITMQ_PORT=%RABBITMQ_PORT%&& dotnet run --project src\Payment\Payment.API\Payment.API.csproj --no-build --no-launch-profile"
 
 :: Notification API (Port 7004)
-start "EB_NOTIFICATION" cmd /c "SET ASPNETCORE_URLS=http://localhost:7004 && SET REDIS_HOST=%REDIS_HOST% && SET RABBITMQ_HOST=%RABBITMQ_HOST% && SET RABBITMQ_PORT=%RABBITMQ_PORT% && SET DISABLE_CORS=true && dotnet run --project src\Notification\Notification.API\Notification.API.csproj --no-build --no-launch-profile"
+start "EB_NOTIFICATION" cmd /c "SET ASPNETCORE_URLS=http://localhost:7004&& SET REDIS_HOST=%REDIS_HOST%&& SET RABBITMQ_HOST=%RABBITMQ_HOST%&& SET RABBITMQ_PORT=%RABBITMQ_PORT%&& dotnet run --project src\Notification\Notification.API\Notification.API.csproj --no-build --no-launch-profile"
 
 :: Payment Simulator (Port 7005)
-start "EB_SIMULATOR" cmd /c "SET ASPNETCORE_URLS=http://localhost:7005 && SET RABBITMQ_HOST=%RABBITMQ_HOST% && SET RABBITMQ_PORT=%RABBITMQ_PORT% && dotnet run --project src\PaymentSimulator\PaymentSimulator.API\PaymentSimulator.API.csproj --no-build --no-launch-profile"
+start "EB_SIMULATOR" cmd /c "SET ASPNETCORE_URLS=http://localhost:7005&& SET RABBITMQ_HOST=%RABBITMQ_HOST%&& SET RABBITMQ_PORT=%RABBITMQ_PORT%&& dotnet run --project src\PaymentSimulator\PaymentSimulator.API\PaymentSimulator.API.csproj --no-build --no-launch-profile"
 
 :: --- 4. Health Checks ---
-echo [4/5] Waiting for APIs to be healthy...
+echo [4/5] Waiting for APIs to be ready...
 
-set "api_ports=7000 7001 7002 7003 7004"
+set "api_checks=7000:/health 7001:/health 7002:/health 7003:/health 7004:/health 7005:/health"
 
 :wait_loop
 set "all_healthy=true"
-for %%p in (%api_ports%) do (
-    powershell -Command "$response = try { Invoke-WebRequest -Uri 'http://localhost:%%p/health' -UseBasicParsing -TimeoutSec 1 } catch { $null }; if (-not ($response -and $response.Content -like '*Healthy*')) { exit 1 } else { exit 0 }"
-    if %ERRORLEVEL% neq 0 (
+for %%c in (%api_checks%) do (
+    for /f "tokens=1,2 delims=:" %%a in ("%%c") do (
+        powershell -Command "$response = try { Invoke-WebRequest -Uri 'http://localhost:%%a%%b' -UseBasicParsing -TimeoutSec 2 } catch { $null }; if (-not ($response -and [int]$response.StatusCode -ge 200 -and [int]$response.StatusCode -lt 400)) { exit 1 } else { exit 0 }"
+    )
+    if errorlevel 1 (
         set "all_healthy=false"
     )
 )
@@ -79,7 +81,7 @@ if "%all_healthy%"=="false" (
 )
 
 echo.
-echo All APIs are Healthy!
+echo All APIs are ready!
 
 :: --- 5. Launch UI ---
 echo [5/5] Launching UI and opening Chrome...
@@ -103,8 +105,9 @@ set /p "input=Command (Q to quit): "
 if /I "%input%"=="Q" (
     echo Stopping all EasyBooking services...
     
-    :: Kill the API windows and their child dotnet processes
-    taskkill /FI "WINDOWTITLE eq EB_*" /F /T >nul 2>&1
+    :: Kill processes listening on local app ports, plus any leftover project processes.
+    :: Window-title based taskkill is unreliable because child process titles can change.
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$ports = 7000,7001,7002,7003,7004,7005,5173; Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $ports -contains $_.LocalPort } | Select-Object -ExpandProperty OwningProcess -Unique | Where-Object { $_ -gt 0 } | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }; Get-CimInstance Win32_Process | Where-Object { $_.Name -in @('dotnet.exe','node.exe','cmd.exe') -and $_.CommandLine -match 'TicketBooking|ticketbooking-ui|Identity\.API|Catalog\.API|Booking\.API|Payment\.API|Notification\.API|PaymentSimulator\.API|vite' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
     
     echo.
     echo All services stopped. (Infrastructure remains running in Docker)
